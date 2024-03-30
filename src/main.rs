@@ -1,90 +1,101 @@
-use std::process::{Command, Output};
+mod devices;
+
 use clap::{Parser, Subcommand};
 use colored::*;
+use devices::*;
+
 
 #[derive(Parser)]
+#[command(version, about, long_about = None)]
+    #[command(propagate_version = true)]
 struct BtCli {
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
-#[derive(Subcommand)]
+impl BtCli {
+    pub fn command(&self) -> Commands{
+        self.command.clone().unwrap_or(Commands::Ls { long_output: false, add_unpaired: false, timeout: None })
+    }
+}
+
+#[derive(Subcommand, Clone)]
 enum Commands {
-    Devices {
-        /// Adds address to output
+    /// List bluetooth devices
+    Ls {
+        /// use a long listing format
         #[arg(short, long, default_value_t = false)]
         long_output: bool,
+        /// Scan for nearby discoverable unpaired 
+        /// devices and include them in the output
+        #[arg(short = 'a', long = "add_unpaired")]
+        add_unpaired: bool,
+        /// use with --add-unpaired or -a to
+        /// end device scan after timeout seconds
+        #[arg(short, long)]
+        timeout: Option<u32>, 
     },
+    /// Connect to a bluetooth device
     Connect {
+        /// Name of the device to connect
         name: String,
-    }
+        /// end device connection attempt after timeout seconds
+        #[arg(short, long)]
+        timeout: Option<u32>, 
+    },
+    /// Get detailed information about a bluetooth device
+    Info {
+        /// Name of the device
+        name: String,
+    },
+    /// Attempts to pair with a device
+    Add {
+        /// Name of the device to pair
+        name: String,
+        /// timeout for scanning and pairing attempts in seconds
+        #[arg(short, long)]
+        timeout: Option<u32>, 
+    },
+    Rm {
+        /// Name of the device to unpair
+        name: String,
+    },
 }
 
 fn main() {
     // Shell
     let cli = BtCli::parse();
     match &cli.command {
-        Some(Commands::Devices { long_output }) => {
-            devicelist(*long_output);
+        Some(Commands::Ls { long_output, add_unpaired, timeout }) => {
+            DeviceList::new(if *add_unpaired { timeout.or(Some(2u32)) } else { None }).print(*long_output);
         }
-        Some(Commands::Connect { name }) => {
-            if let Some(address) = name_to_addess(name) {
-                let _ = Command::new("bluetoothctl").arg("connect").arg(address).status();
+        Some(Commands::Connect { name, timeout }) => {
+            for device in DeviceList::new(None).devices_with_name(name) {
+                if device.connect(timeout.unwrap_or(30u32)) {
+                    println!("{} connected.", device.name_colored());
+                }
+            };
         }
-        }
-        None => devicelist(false),
-    }
-}
-
-fn devicelist(long_output: bool) {
-    let bluetoothctl_output : Output = Command::new("bluetoothctl").arg("devices").output().expect("failed to execute process");
-    let output_str = String::from_utf8(bluetoothctl_output.stdout).expect("Invalid UTF-8 in output");
-    for line in output_str.lines() {
-        let mut split = line.splitn(3, ' ');
-        // First is always "Device" and unnecessary
-        split.next();
-        let address = split.next().unwrap_or_else(|| "Address Not Known");
-        let device_name = split.next().unwrap_or_else(|| "");
-        let device_name_text = match check_if_address_connected(address) {
-            true => device_name.bold().green(),
-            false => device_name.into()
-        };
-        if long_output {
-            println!("{} {device_name_text}", address.bright_black());
-        } else {
-            print!("{device_name_text}  ");
-        }
-    }
-    // Newline
-    println!("");
-}
-
-fn name_to_addess(name: &str) -> Option<String> {
-    let bluetoothctl_output : Output = Command::new("bluetoothctl").arg("devices").output().expect("failed to get device list");
-    let output_str = String::from_utf8(bluetoothctl_output.stdout).expect("Invalid UTF-8 in output");
-    for line in output_str.lines() {
-        let mut split = line.splitn(3, ' ');
-        // First is always "Device" and unnecessary
-        split.next();
-        let address = split.next().unwrap_or_else(|| "");
-        if let Some(device_name) = split.next() {
-            if device_name == name {
-                return Some(address.to_string());
+        Some(Commands::Info { name }) => {
+            for device in DeviceList::new(None).devices_with_name(name) {
+                println!("{:?}", device);
             }
         }
+        Some(Commands::Add { name, timeout }) => {
+            for device in DeviceList::new(*timeout).devices_with_name(name) {
+                if device.pair(timeout.unwrap_or(30u32)) {
+                    println!("{} paired.", device.name_colored());
+                    device.connect(60u32);
+                }
+            };
+        }
+        Some(Commands::Rm { name }) => {
+            for device in DeviceList::new(None).devices_with_name(name) {
+                device.unpair();
+            }
+        }
+        None => DeviceList::new(None).print(false),
     }
-    return None;
 }
 
-fn check_if_address_connected(address: &str) -> bool {
-    let bluetoothctl_output : Output = Command::new("bluetoothctl").arg("info").arg(address).output().expect("failed to get device info");
-    match String::from_utf8(bluetoothctl_output.stdout) {
-        Ok(str) => {
-            return str.contains("Connected: yes");
-        },
-        Err(..) => {
-            return false;
-        }
-    };
-}
 
