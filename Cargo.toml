@@ -1,5 +1,7 @@
 [package]
 name = "bt"
+description = "An intuitive Bluetooth CLI"
+authors = ["Profi06"]
 version = "0.1.0"
 edition = "2021"
 
@@ -9,3 +11,4 @@ edition = "2021"
 clap = { version = "4.5.4", features = ["derive"] }
 clap_complete = "4.5.1"
 colored = "2"
+termsize = "0.1"

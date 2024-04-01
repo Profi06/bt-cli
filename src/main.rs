@@ -1,22 +1,16 @@
-mod devices;
+mod bluetooth;
 
 use clap::{Parser, Subcommand};
-use colored::*;
-use devices::*;
+use std::env;
+use bluetooth::*;
 
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
-    #[command(propagate_version = true)]
+#[command(propagate_version = true)]
 struct BtCli {
     #[command(subcommand)]
     command: Option<Commands>,
-}
-
-impl BtCli {
-    pub fn command(&self) -> Commands{
-        self.command.clone().unwrap_or(Commands::Ls { long_output: false, add_unpaired: false, timeout: None })
-    }
 }
 
 #[derive(Subcommand, Clone)]
@@ -26,12 +20,18 @@ enum Commands {
         /// use a long listing format
         #[arg(short, long, default_value_t = false)]
         long_output: bool,
+        /// Only print one device per line. Has no effect on 
+        /// long listing format, where this is always the case
+        #[arg(short = '1', long, default_value_t = false)]
+        linewise: bool, 
+
         /// Scan for nearby discoverable unpaired 
         /// devices and include them in the output
         #[arg(short = 'a', long = "add_unpaired")]
         add_unpaired: bool,
-        /// use with --add-unpaired or -a to
-        /// end device scan after timeout seconds
+        /// Use with --add-unpaired or -a to
+        /// end device scan after timeout seconds.
+        /// Default is environment variable BT_TIMEOUT or 30
         #[arg(short, long)]
         timeout: Option<u32>, 
     },
@@ -39,16 +39,18 @@ enum Commands {
     Connect {
         /// Name of the device to connect
         name: String,
-        /// end device connection attempt after timeout seconds
-        #[arg(short, long)]
-        timeout: Option<u32>, 
+    },
+    /// Disconnect from a bluetooth device
+    Disconnect {
+        /// Name of the device to disconnect
+        name: String,
     },
     /// Get detailed information about a bluetooth device
     Info {
         /// Name of the device
         name: String,
     },
-    /// Attempts to pair with a device
+    /// Pair with a bluetooth device
     Add {
         /// Name of the device to pair
         name: String,
@@ -56,6 +58,7 @@ enum Commands {
         #[arg(short, long)]
         timeout: Option<u32>, 
     },
+    /// Remove a bluetooth device
     Rm {
         /// Name of the device to unpair
         name: String,
@@ -66,26 +69,32 @@ fn main() {
     // Shell
     let cli = BtCli::parse();
     match &cli.command {
-        Some(Commands::Ls { long_output, add_unpaired, timeout }) => {
-            DeviceList::new(if *add_unpaired { timeout.or(Some(2u32)) } else { None }).print(*long_output);
+        Some(Commands::Ls { long_output, linewise, add_unpaired, timeout }) => {
+            DeviceList::new(if *add_unpaired { get_timeout(timeout, Some(30)) } else { None })
+                .print(*linewise, *long_output);
         }
-        Some(Commands::Connect { name, timeout }) => {
+        Some(Commands::Connect { name }) => {
             for device in DeviceList::new(None).devices_with_name(name) {
-                if device.connect(timeout.unwrap_or(30u32)) {
-                    println!("{} connected.", device.name_colored());
-                }
+                device.connect();
+            };
+        }
+        Some(Commands::Disconnect { name }) => {
+            for device in DeviceList::new(None).devices_with_name(name) {
+                device.disconnect();
             };
         }
         Some(Commands::Info { name }) => {
             for device in DeviceList::new(None).devices_with_name(name) {
-                println!("{:?}", device);
+                device.update_info();
+                println!("{}", device.info_colored());
             }
         }
         Some(Commands::Add { name, timeout }) => {
-            for device in DeviceList::new(*timeout).devices_with_name(name) {
-                if device.pair(timeout.unwrap_or(30u32)) {
-                    println!("{} paired.", device.name_colored());
-                    device.connect(60u32);
+            println!("Scanning for nearby pairable devices...");
+            for device in DeviceList::new(get_timeout(timeout, Some(30))).devices_with_name(name) {
+                if device.pair() {
+                    device.trust();
+                    device.connect();
                 }
             };
         }
@@ -94,8 +103,13 @@ fn main() {
                 device.unpair();
             }
         }
-        None => DeviceList::new(None).print(false),
+        None => DeviceList::new(None).print(false, false),
     }
 }
 
-
+fn get_timeout(param: &Option<u32>, default: Option<u32>) -> Option<u32> {
+    param.or_else(|| {match env::var("BT_TIMEOUT") {
+        Ok(var) => var.trim().parse().ok().or(default),
+        Err(_) => default,
+    }})
+}
