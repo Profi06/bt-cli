@@ -375,6 +375,7 @@ impl DeviceList {
 
     pub fn print_columns(&mut self) {
         // First find highest amount of possible colums and the best fit column widths
+        #[derive(Debug)]
         struct ColsInfo { widths: Vec<u8>, total_w: u16 }
         let max_w: u16 = match termsize::get() {
             // cols is terminal width in chars
@@ -385,7 +386,7 @@ impl DeviceList {
         // Lower bound: Assume all names as long as longest
         let min_cols = max_w.checked_div(self.max_name_len.into()).unwrap_or(0);
         // Upper bound: Assume all names as long as shortest
-        let max_cols = max_w.checked_div(self.min_name_len.into()).unwrap_or(max_w);
+        let max_cols = max_w.checked_div(self.min_name_len.into()).unwrap_or(max_w).min(self.devices.len().try_into().unwrap_or(max_w));
         // Fallback to print_line if max_name_len > max_w
         // or max_name_len == 0 for the sake of simplicity
         if min_cols == 0 {
@@ -405,7 +406,7 @@ impl DeviceList {
             })
         };
 
-        for (mut idx, device) in self.devices.iter().enumerate() {
+        for (idx, device) in self.devices.iter().enumerate() {
             for (add_cols, col_info) in col_infos.iter_mut().enumerate() {
                 // This amount of device columns has already been proven 
                 // unusable. Skip to next column amount option
@@ -415,7 +416,7 @@ impl DeviceList {
 
                 // Calculate column device would be displayed in 
                 // add_cols + min_cols is amount of columns
-                idx %= add_cols + usize::from(min_cols);
+                let idx = idx % (add_cols + usize::from(min_cols));
                 if col_info.widths[idx] < device.name_len() {
                     let size_incr = device.name_len() - col_info.widths[idx];
                     col_info.widths[idx] += size_incr;
@@ -433,8 +434,14 @@ impl DeviceList {
             };
         };
         // Finally, print
+        eprintln!("{:?}", col_info);
         let mut stdout = stdout().lock();
         for (idx, device) in self.devices.iter_mut().enumerate() {
+            // Output newline when idx 0 is reached (except for first line, where newline is
+            // assumed to already be present)
+            if idx != 0 && idx % col_info.widths.len() == 0 {
+                let _ = writeln!(stdout, "");
+            }
             let idx = idx % col_info.widths.len();
             device.update_info();
             let printed_str = 
@@ -443,12 +450,8 @@ impl DeviceList {
                 } else {
                     device.name_colored()
                 };
-            let padding = " ".repeat((col_info.widths[idx] - device.name_len() + extra_char_num - 2).into());
+            let padding = " ".repeat((col_info.widths[idx] + extra_char_num - device.name_len() - 2).into());
             let _ = write!(stdout, "{printed_str}{padding}");
-            // Newline after last col
-            if idx == col_info.widths.len() {
-                let _ = writeln!(stdout);
-            }
         }
         let _ = writeln!(stdout);
     }
