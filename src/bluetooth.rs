@@ -1,4 +1,5 @@
-use std::{collections::HashMap, io::*, process::{Command, Output, Stdio}};
+use std::{collections::HashMap, io::{Write, stdout}, process::{Command, Output, Stdio}};
+use regex::Regex;
 use colored::*;
 use termsize::{self, Size};
 
@@ -330,12 +331,34 @@ impl DeviceList {
         DeviceList { devices , contains_whitespaced_names, max_name_len, min_name_len }
     }
 
+    /// Returns devices in device list with matching name. If regex is true name is matched
+    /// as a regex pattern, otherwise it is matched literally.
+    pub fn devices_with_name(&mut self, name : &str, do_regex: bool) -> Vec<&mut Device> {
+        if do_regex {
+            self.devices_matching_name_regex(name)
+        } else {
+            self.devices_with_literal_name(name)
+        }
+    }
     /// Returns devices in device list with given name
-    pub fn devices_with_name(&mut self, name : &str) -> Vec<&mut Device> {
+    pub fn devices_with_literal_name(&mut self, name : &str) -> Vec<&mut Device> {
         let mut devices = Vec::new();
         for device in &mut self.devices {
             if device.name == name {
                 devices.push(device);
+            }
+        }
+        devices
+    }
+
+    /// Returns devices in device list with name matching regex
+    pub fn devices_matching_name_regex(&mut self, regex: &str) -> Vec<&mut Device> {
+        let mut devices = Vec::new();
+        if let Ok(re) = Regex::new(regex) {
+            for device in &mut self.devices {
+                if re.is_match(&device.name) {
+                    devices.push(device);
+                }
             }
         }
         devices
@@ -434,7 +457,6 @@ impl DeviceList {
             };
         };
         // Finally, print
-        eprintln!("{:?}", col_info);
         let mut stdout = stdout().lock();
         for (idx, device) in self.devices.iter_mut().enumerate() {
             // Output newline when idx 0 is reached (except for first line, where newline is

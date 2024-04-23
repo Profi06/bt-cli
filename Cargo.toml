@@ -12,3 +12,4 @@ clap = { version = "4.5.4", features = ["derive"] }
 clap_complete = "4.5.1"
 colored = "2"
 termsize = "0.1"
+regex = "1.10.4"

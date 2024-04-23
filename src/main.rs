@@ -39,21 +39,37 @@ enum Commands {
     Connect {
         /// Name of the device to connect
         name: String,
+
+        /// Whether to interpret the name as a regex pattern
+        #[arg(short, long, default_value_t = false)]
+        regex: bool,
     },
     /// Disconnect from a bluetooth device
     Disconnect {
         /// Name of the device to disconnect
         name: String,
+        
+        /// Whether to interpret the name as a regex pattern
+        #[arg(short, long, default_value_t = false)]
+        regex: bool,
     },
     /// Get detailed information about a bluetooth device
     Info {
         /// Name of the device
         name: String,
+        
+        /// Whether to interpret the name as a regex pattern
+        #[arg(short, long, default_value_t = false)]
+        regex: bool,
     },
     /// Pair with a bluetooth device
     Add {
         /// Name of the device to pair
         name: String,
+        
+        /// Whether to interpret the name as a regex pattern
+        #[arg(short, long, default_value_t = false)]
+        regex: bool,
         /// timeout for scanning and pairing attempts in seconds
         #[arg(short, long)]
         timeout: Option<u32>, 
@@ -62,6 +78,10 @@ enum Commands {
     Rm {
         /// Name of the device to unpair
         name: String,
+        
+        /// Whether to interpret the name as a regex pattern
+        #[arg(short, long, default_value_t = false)]
+        regex: bool,
     },
 }
 
@@ -73,26 +93,26 @@ fn main() {
             DeviceList::new(if *add_unpaired { get_timeout(timeout, Some(30)) } else { None })
                 .print(*linewise, *long_output);
         }
-        Some(Commands::Connect { name }) => {
-            for device in DeviceList::new(None).devices_with_name(name) {
+        Some(Commands::Connect { name, regex }) => {
+            for device in DeviceList::new(None).devices_with_name(name, *regex) {
                 device.connect();
             };
         }
-        Some(Commands::Disconnect { name }) => {
-            for device in DeviceList::new(None).devices_with_name(name) {
+        Some(Commands::Disconnect { name, regex }) => {
+            for device in DeviceList::new(None).devices_with_name(name, *regex) {
                 device.disconnect();
             };
         }
-        Some(Commands::Info { name }) => {
-            for device in DeviceList::new(None).devices_with_name(name) {
+        Some(Commands::Info { name, regex }) => {
+            for device in DeviceList::new(None).devices_with_name(name, *regex) {
                 device.update_info();
                 println!("{}", device.info_colored());
             }
         }
-        Some(Commands::Add { name, timeout }) => {
+        Some(Commands::Add { name, regex, timeout }) => {
             println!("Scanning for nearby pairable devices...");
             let mut devices_added = 0;
-            for device in DeviceList::new(get_timeout(timeout, Some(5))).devices_with_name(name) {
+            for device in DeviceList::new(get_timeout(timeout, Some(5))).devices_with_name(name, *regex) {
                 if device.pair() {
                     devices_added += 1;
                     device.trust();
@@ -101,8 +121,8 @@ fn main() {
             };
             println!("Paired {} devices.", devices_added);
         }
-        Some(Commands::Rm { name }) => {
-            for device in DeviceList::new(None).devices_with_name(name) {
+        Some(Commands::Rm { name, regex }) => {
+            for device in DeviceList::new(None).devices_with_name(name, *regex) {
                 device.unpair();
             }
         }
