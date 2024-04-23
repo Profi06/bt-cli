@@ -222,12 +222,12 @@ impl Device {
     /// Used by some *_colored methods.
     fn to_colored(&self, str: &str) -> ColoredString {
         let mut return_value : ColoredString = str.into();
-        if self.connected == Some(true) {
-            return_value = return_value.bold().blue();
-        } 
         if self.paired != Some(true) {
             return_value = return_value.bright_black();
         }
+        if self.connected == Some(true) {
+            return_value = return_value.bold().blue();
+        } 
         return_value
     }
 

@@ -31,7 +31,7 @@ enum Commands {
         add_unpaired: bool,
         /// Use with --add-unpaired or -a to
         /// end device scan after timeout seconds.
-        /// Default is environment variable BT_TIMEOUT or 30
+        /// Default is environment variable BT_TIMEOUT or 5
         #[arg(short, long)]
         timeout: Option<u32>, 
     },
@@ -91,12 +91,15 @@ fn main() {
         }
         Some(Commands::Add { name, timeout }) => {
             println!("Scanning for nearby pairable devices...");
-            for device in DeviceList::new(get_timeout(timeout, Some(30))).devices_with_name(name) {
+            let mut devices_added = 0;
+            for device in DeviceList::new(get_timeout(timeout, Some(5))).devices_with_name(name) {
                 if device.pair() {
+                    devices_added += 1;
                     device.trust();
                     device.connect();
                 }
             };
+            println!("Paired {} devices.", devices_added);
         }
         Some(Commands::Rm { name }) => {
             for device in DeviceList::new(None).devices_with_name(name) {
