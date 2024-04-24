@@ -409,7 +409,7 @@ impl DeviceList {
         // Lower bound: Assume all names as long as longest
         let min_cols = max_w.checked_div(self.max_name_len.into()).unwrap_or(0);
         // Upper bound: Assume all names as long as shortest
-        let max_cols = max_w.checked_div(self.min_name_len.into()).unwrap_or(max_w).min(self.devices.len().try_into().unwrap_or(max_w));
+        let max_cols = max_w.checked_div(self.min_name_len.into()).unwrap_or(max_w);
         // Fallback to print_line if max_name_len > max_w
         // or max_name_len == 0 for the sake of simplicity
         if min_cols == 0 {
