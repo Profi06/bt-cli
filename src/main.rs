@@ -40,79 +40,94 @@ enum Commands {
         /// Name of the device to connect
         name: String,
 
-        /// Whether to interpret the name as a regex pattern
+        /// If false the device name must only contain the given name, otherwise it must
+        /// match exactly.
         #[arg(short, long, default_value_t = false)]
-        regex: bool,
+        full_match: bool,
     },
     /// Disconnect from a bluetooth device
     Disconnect {
         /// Name of the device to disconnect
         name: String,
         
-        /// Whether to interpret the name as a regex pattern
+        /// If false the device name must only contain the given name, otherwise it must
+        /// match exactly.
         #[arg(short, long, default_value_t = false)]
-        regex: bool,
+        full_match: bool,
     },
     /// Get detailed information about a bluetooth device
     Info {
         /// Name of the device
         name: String,
         
-        /// Whether to interpret the name as a regex pattern
+        /// If false the device name must only contain the given name, otherwise it must
+        /// match exactly.
         #[arg(short, long, default_value_t = false)]
-        regex: bool,
+        full_match: bool,
     },
     /// Pair with a bluetooth device
-    Add {
+    Pair {
         /// Name of the device to pair
         name: String,
         
-        /// Whether to interpret the name as a regex pattern
+        /// If false the device name must only contain the given name, otherwise it must
+        /// match exactly.
         #[arg(short, long, default_value_t = false)]
-        regex: bool,
+        full_match: bool,
+
         /// timeout for scanning and pairing attempts in seconds
         #[arg(short, long)]
         timeout: Option<u32>, 
     },
     /// Remove a bluetooth device
-    Rm {
+    Unpair {
         /// Name of the device to unpair
         name: String,
-        
-        /// Whether to interpret the name as a regex pattern
+
+        /// If false the device name must only contain the given name, otherwise it must
+        /// match exactly.
         #[arg(short, long, default_value_t = false)]
-        regex: bool,
+        full_match: bool,
     },
 }
 
 fn main() {
     // Shell
     let cli = BtCli::parse();
+    let mut devicelist = DeviceList::new();
     match &cli.command {
         Some(Commands::Ls { long_output, linewise, add_unpaired, timeout }) => {
-            DeviceList::new(if *add_unpaired { get_timeout(timeout, Some(30)) } else { None })
-                .print(*linewise, *long_output);
+            devicelist.fill(if *add_unpaired { get_timeout(timeout, Some(30)) } else { None });
+            devicelist.print(*linewise, *long_output);
         }
-        Some(Commands::Connect { name, regex }) => {
-            for device in DeviceList::new(None).devices_with_name(name, *regex) {
+        Some(Commands::Connect { name, full_match }) => {
+            devicelist.fill(None);
+            for device in devicelist.filtered_name(name, get_behaviour(*full_match)) {
+                let mut device = device.lock().expect("Mutex should not be poisoned.");
                 device.connect();
             };
         }
-        Some(Commands::Disconnect { name, regex }) => {
-            for device in DeviceList::new(None).devices_with_name(name, *regex) {
+        Some(Commands::Disconnect { name, full_match }) => {
+            devicelist.fill(None);
+            for device in devicelist.filtered_name(name, get_behaviour(*full_match)) {
+                let mut device = device.lock().expect("Mutex should not be poisoned.");
                 device.disconnect();
             };
         }
-        Some(Commands::Info { name, regex }) => {
-            for device in DeviceList::new(None).devices_with_name(name, *regex) {
+        Some(Commands::Info { name, full_match }) => {
+            devicelist.fill(None);
+            for device in devicelist.filtered_name(name, get_behaviour(*full_match)) {
+                let mut device = device.lock().expect("Mutex should not be poisoned.");
                 device.update_info();
                 println!("{}", device.info_colored());
             }
         }
-        Some(Commands::Add { name, regex, timeout }) => {
+        Some(Commands::Pair { name, full_match, timeout }) => {
             println!("Scanning for nearby pairable devices...");
             let mut devices_added = 0;
-            for device in DeviceList::new(get_timeout(timeout, Some(5))).devices_with_name(name, *regex) {
+            devicelist.fill(get_timeout(timeout, Some(5)));
+            for device in devicelist.filtered_name(name, get_behaviour(*full_match)) {
+                let mut device = device.lock().expect("Mutex should not be poisoned.");
                 if device.pair() {
                     devices_added += 1;
                     device.trust();
@@ -121,12 +136,17 @@ fn main() {
             };
             println!("Paired {} devices.", devices_added);
         }
-        Some(Commands::Rm { name, regex }) => {
-            for device in DeviceList::new(None).devices_with_name(name, *regex) {
+        Some(Commands::Unpair { name, full_match }) => {
+            devicelist.fill(None);
+            for device in devicelist.filtered_name(name, get_behaviour(*full_match)) {
+                let mut device = device.lock().expect("Mutex should not be poisoned.");
                 device.unpair();
             }
         }
-        None => DeviceList::new(None).print(false, false),
+        None => {
+            devicelist.fill(None);
+            devicelist.print(false, false);
+        },
     }
 }
 
@@ -135,4 +155,12 @@ fn get_timeout(param: &Option<u32>, default: Option<u32>) -> Option<u32> {
         Ok(var) => var.trim().parse().ok().or(default),
         Err(_) => default,
     }})
+}
+
+fn get_behaviour(full_match: bool) -> FilterBehaviour {
+    if full_match {
+        FilterBehaviour::Full
+    } else {
+        FilterBehaviour::Contains
+    }
 }

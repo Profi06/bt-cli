@@ -1,4 +1,9 @@
-use std::{collections::HashMap, io::{Write, stdout}, process::{Command, Output, Stdio}};
+use std::{
+    collections::HashMap,
+    io::{stdout, IsTerminal, Write}, 
+    process::{Command, Output, Stdio}, 
+    sync::{Arc, Mutex},
+};
 use regex::Regex;
 use colored::*;
 use termsize::{self, Size};
@@ -69,8 +74,8 @@ impl Device {
             ("Battery Percentage: ", InfoTypeMut::OptBattery(&mut self.battery)),
             ("Icon: ", InfoTypeMut::OptString(&mut self.icon)),
         ]);
-        let str = String::from_utf8(cmd.stdout).unwrap_or("".to_string());
-        for line in str.lines() {
+        let out = String::from_utf8(cmd.stdout).unwrap_or("".to_string());
+        for line in out.lines() {
             let line = line.trim_start();
             for (text, infotype) in &mut value_hashmap {
                 // Check that Line starts with specified text
@@ -107,116 +112,79 @@ impl Device {
     pub fn pair(&mut self) -> bool {
         println!("Attempting to pair with {}...", self.name_colored());
         pairable(true);
-        let ret = Command::new("bluetoothctl")
-            .args(["pair", &self.address])
-            .output().is_ok_and(|output| {
-                if let Ok(out) = String::from_utf8(output.stdout) {
-                    // Also consider pairing successful if it failed due to already being paired 
-                    let success = out.contains("Pairing successful") || String::from_utf8(output.stderr)
-                        .is_ok_and(|stderr| stderr.contains("org.bluez.Error.AlreadyExists"));
-                    if success {
-                        self.paired = Some(true);
-                        println!("{} paired.", self.name_colored());
-                    } else {
-                        eprintln!("Could not pair {}.", self.name_colored());
-                    }
-                    return success;
-                };
-                false
-            });
+        let ret = cli_cmd(vec!["pair", &self.address], |out, err| 
+            out.contains("Pairing successful") || err.contains("org.bluez.Error.AlreadyExists")
+        );
         pairable(false);
+        if ret {
+            self.paired = Some(true);
+            println!("{} paired.", self.name_colored());
+        } else {
+            eprintln!("Could not pair {}.", self.name_colored());
+        }
         ret
     }
 
     /// Unpairs the device
     pub fn unpair(&mut self) -> bool {
         println!("Attempting to remove {}...", self.name_colored());
-        Command::new("bluetoothctl")
-            .args(["remove", &self.address])
-            .output().is_ok_and(|output| {
-                if let Ok(out) = String::from_utf8(output.stdout) {
-                    let success = out.contains("Device has been removed");
-                    if success {
-                        self.paired = Some(false);
-                        self.connected = Some(false);
-                        println!("{} removed.", self.name_colored());
-                    } else {
-                        println!("Could not remove {}.", self.name_colored());
-                    }
-                    return success;
-                };
-                false
-            })
+        let success = cli_cmd(vec!["remove", &self.address], |out, _| out.contains("Device has been removed"));
+        if success {
+            self.paired = Some(false);
+            self.connected = Some(false);
+            println!("{} unpaired.", self.name_colored());
+        } else {
+            println!("Could not unpair {}.", self.name_colored());
+        }
+        success
     }
 
     /// Attempts to trust 
     pub fn trust(&mut self) -> bool {
-        Command::new("bluetoothctl")
-            .args(["trust", &self.address])
-            .output().is_ok_and(|output| {
-                if let Ok(out) = String::from_utf8(output.stdout) {
-                    // Also consider pairing successful if it failed due to already being paired 
-                    let success = out.contains(&("Changing".to_owned() + &self.address + " trust succeeded"));
-                    if success {
-                        self.trusted = Some(true);
-                    }
-                    return success;
-                };
-                false
-            })
+        let success = cli_cmd(vec!["trust", &self.address], |out, _| 
+            out.contains(&("Changing".to_owned() + &self.address + " trust succeeded"))
+        );
+        if success {
+            self.trusted = Some(true);
+        }
+        success
     }
 
     /// Untrusts the device
     pub fn untrust(&mut self) -> bool {
-        Command::new("bluetoothctl")
-            .args(["remove", &self.address])
-            .output().is_ok_and(|output| {
-                if let Ok(out) = String::from_utf8(output.stdout) {
-                    println!("{out}");
-                    let success = out.contains(&("Changing".to_owned() + &self.address + " untrust succeeded"));
-                    if success {
-                        self.trusted = Some(false);
-                    }
-                    return success;
-                };
-                false
-            })
+        let success = cli_cmd(vec!["remove", &self.address], |out, _| 
+            out.contains(&("Changing".to_owned() + &self.address + " untrust succeeded"))
+        );
+        if success {
+            self.trusted = Some(false);
+        }
+        success
     }
 
     /// Attempts to connect to device
     pub fn connect(&mut self) -> bool {
         println!("Attempting to connect with {}...", self.name_colored());
-        Command::new("bluetoothctl")
-            .args(["connect", &self.address])
-            .output().is_ok_and(|output| {
-                if let Ok(out) = String::from_utf8(output.stdout) {
-                    let success = out.contains("Connection successful");
-                    if success {
-                        self.connected = Some(true);
-                        println!("{} connected.", self.name_colored());
-                    }
-                    return success;
-                };
-                false
-            })
+        let success = cli_cmd(vec!["connect", &self.address], |out, _|
+            out.contains("Connection successful")
+        );
+        if success {
+            self.connected = Some(true);
+            println!("{} connected.", self.name_colored());
+        }
+        success
     }
 
     /// Attempts to disconnect from device
     pub fn disconnect(&mut self) -> bool {
         println!("Attempting to disconnect from {}...", self.name_colored());
-        Command::new("bluetoothctl")
-            .args(["disconnect", &self.address])
-            .output().is_ok_and(|output| {
-                if let Ok(out) = String::from_utf8(output.stdout) {
-                    let success = out.contains(&("[CHG] Device ".to_owned() + &self.address + " Connected: no"));
-                    if success {
-                        self.connected = Some(false);
-                        println!("{} disconnected.", self.name_colored());
-                    }
-                    return success;
-                };
-                false
-            })
+        let success = cli_cmd(vec!["disconnect", &self.address], |out, _|
+            out.contains(&("[CHG] Device ".to_owned() + &self.address + " Connected: no"))
+        );
+        if success {
+            self.connected = Some(false);
+            println!("{} disconnected.", self.name_colored());
+        }
+        success
     }
 
     /// Colors str based on device state. 
@@ -280,23 +248,37 @@ impl Device {
     }
 }
 
+type Devices = Vec<Arc<Mutex<Device>>>;
+
 #[derive(Debug)]
 pub struct DeviceList {
-    devices: Vec<Device>,
+    devices: Devices,
 
     // Following properties are saved for output
-    contains_whitespaced_names: bool,
+    quote_names: bool,
     max_name_len: u8,
     min_name_len: u8,
 }
 
+pub enum FilterBehaviour {
+    Full,
+    Contains,
+    Regex,
+}
+
 impl DeviceList {
-    pub fn new(scan_secs : Option<u32>) -> DeviceList {
-        let mut devices : Vec<Device> = Vec::new();
-        let mut contains_whitespaced_names = false;
-        let mut max_name_len = 0;
-        let mut min_name_len = u8::MAX;
+    pub fn new() -> DeviceList {
+        DeviceList { 
+            devices: Vec::new(), 
+            quote_names: false, 
+            max_name_len: 0, 
+            min_name_len: 0 
+        }
+    }
+
+    pub fn fill(&mut self, scan_secs : Option<u32>) -> &mut DeviceList {
         let mut devices_args = vec!["devices"];
+
         if let Some(scan_secs) = scan_secs {
             // bluetoothctl scan for unpaired nearby devices
             let _ = Command::new("bluetoothctl")
@@ -321,78 +303,96 @@ impl DeviceList {
                 continue;
             }
             if let (Some(address), Some(name)) = (split.next(), split.next()) {
-                contains_whitespaced_names |= name.contains(char::is_whitespace);
+                self.quote_names |= name.contains(char::is_whitespace);
                 let device = Device::new(address, name);
-                max_name_len = max_name_len.max(device.name_len());
-                min_name_len = max_name_len.min(device.name_len());
-                devices.push(device);
+                self.max_name_len = self.max_name_len.max(device.name_len());
+                self.min_name_len = self.max_name_len.min(device.name_len());
+                self.devices.push(Arc::new(Mutex::new(device)));
             }
         }
-        DeviceList { devices , contains_whitespaced_names, max_name_len, min_name_len }
+        self.quote_names &= stdout().lock().is_terminal();
+        self
     }
 
-    /// Returns devices in device list with matching name. If regex is true name is matched
-    /// as a regex pattern, otherwise it is matched literally.
-    pub fn devices_with_name(&mut self, name : &str, do_regex: bool) -> Vec<&mut Device> {
-        if do_regex {
-            self.devices_matching_name_regex(name)
-        } else {
-            self.devices_with_literal_name(name)
+    pub fn filtered<F>(&self, filter: F) -> DeviceList 
+        where F: Fn(&Device) -> bool {
+        let mut retval = DeviceList::new();
+        for device_ref in &self.devices {
+            let mut matches = false;
+            if let Ok(device) = device_ref.lock() {
+                matches = filter(&device);
+            }
+            if matches {
+                retval.devices.push(Arc::clone(&device_ref));
+            }
+        }
+        retval
+    } 
+
+    /// Returns devices in device list with name matching the filterstr, with "matching"
+    /// defined according to behaviour.
+    pub fn filtered_name(&self, filterstr : &str, behaviour: FilterBehaviour) -> DeviceList {
+        match behaviour {
+            FilterBehaviour::Full => self.filtered_name_full(filterstr),
+            FilterBehaviour::Contains => self.filtered_name_contains(filterstr),
+            FilterBehaviour::Regex => self.filtered_name_regex(filterstr),
         }
     }
     /// Returns devices in device list with given name
-    pub fn devices_with_literal_name(&mut self, name : &str) -> Vec<&mut Device> {
-        let mut devices = Vec::new();
-        for device in &mut self.devices {
-            if device.name == name {
-                devices.push(device);
-            }
-        }
-        devices
+    pub fn filtered_name_full(&self, name : &str) -> DeviceList {
+        self.filtered(|device| device.name == name)
     }
 
-    /// Returns devices in device list with name matching regex
-    pub fn devices_matching_name_regex(&mut self, regex: &str) -> Vec<&mut Device> {
-        let mut devices = Vec::new();
-        if let Ok(re) = Regex::new(regex) {
-            for device in &mut self.devices {
-                if re.is_match(&device.name) {
-                    devices.push(device);
-                }
-            }
+    /// Returns devices in device list with name containing substr
+    pub fn filtered_name_contains(&self, substr : &str) -> DeviceList {
+        self.filtered(|device| device.name.contains(substr))
+    }
+
+    /// Returns devices in device list with name matching regex.
+    pub fn filtered_name_regex(&self, regex: &str) -> DeviceList {
+        match Regex::new(regex) {
+            Ok(re) => self.filtered(|device| re.is_match(&device.name)),
+            Err(_) => DeviceList::new(),
         }
-        devices
+    }
+
+    /// Returns the name of the device with decorations depending on state of self
+    pub fn correctly_quoted_device_name(&self, device: &Device) -> ColoredString {
+        if self.quote_names {
+            device.quoted_name_colored("'", " ")
+        } else {
+            device.name_colored()
+        }
     }
 
     pub fn print(&mut self, linewise: bool, long_output: bool) {
         if !linewise && !long_output {
             self.print_columns();
         } else if linewise {
-            self.print_line()
+            self.print_line();
         } else if long_output {
-            let mut stdout = stdout().lock();
-            for device in &mut self.devices {
-                device.update_info();
-                let _ = writeln!(stdout, "{} {}", &device.address,
-                    if self.contains_whitespaced_names {
-                        device.quoted_name_colored("'", " ")
-                    } else {
-                        device.name_colored()
-                    });
-            }
+            self.print_long();
         }
     }
 
+    /// Prints each device on its own line
     pub fn print_line(&mut self) {
         let mut stdout = stdout().lock();
-        for device in &mut self.devices {
+        for device in &self.devices {
+            let mut device = device.lock().expect("Mutex should not be poisoned.");
             device.update_info();
-            let _ = writeln!(stdout, "{}", 
-                if self.contains_whitespaced_names {
-                    device.quoted_name_colored("'", " ")
-                } else {
-                    device.name_colored()
-                });
+            let _ = writeln!(stdout, "{}",
+                self.correctly_quoted_device_name(&device));
+        }
+    }
+
+    pub fn print_long(&mut self) {
+        let mut stdout = stdout().lock();
+        for device in &self.devices {
+            let mut device = device.lock().expect("Mutex should not be poisoned.");
+            device.update_info();
+            let _ = writeln!(stdout, "{} {}", &device.address,
+                self.correctly_quoted_device_name(&device));
         }
     }
 
@@ -418,7 +418,7 @@ impl DeviceList {
         }
 
         // If there are whitespaced names, also account for space used by qoutes
-        let extra_char_num = 2 + 2 * u8::from(self.contains_whitespaced_names);
+        let extra_char_num = 2 + 2 * u8::from(self.quote_names);
         // Infos for every column amount considered
         let mut col_infos: Vec<ColsInfo> = Vec::new();
         col_infos.reserve((max_cols + 1 - min_cols).try_into().unwrap_or(0));
@@ -430,6 +430,7 @@ impl DeviceList {
         };
 
         for (idx, device) in self.devices.iter().enumerate() {
+            let device = device.lock().expect("Mutex should not be poisoned.");
             for (add_cols, col_info) in col_infos.iter_mut().enumerate() {
                 // This amount of device columns has already been proven 
                 // unusable. Skip to next column amount option
@@ -458,7 +459,8 @@ impl DeviceList {
         };
         // Finally, print
         let mut stdout = stdout().lock();
-        for (idx, device) in self.devices.iter_mut().enumerate() {
+        for (idx, device) in self.devices.iter().enumerate() {
+            let mut device = device.lock().expect("Mutex should not be poisoned.");
             // Output newline when idx 0 is reached (except for first line, where newline is
             // assumed to already be present)
             if idx != 0 && idx % col_info.widths.len() == 0 {
@@ -467,11 +469,7 @@ impl DeviceList {
             let idx = idx % col_info.widths.len();
             device.update_info();
             let printed_str = 
-                if self.contains_whitespaced_names {
-                    device.quoted_name_colored("'", " ")
-                } else {
-                    device.name_colored()
-                };
+                self.correctly_quoted_device_name(&device);
             let padding = " ".repeat((col_info.widths[idx] + extra_char_num - device.name_len() - 2).into());
             let _ = write!(stdout, "{printed_str}{padding}");
         }
@@ -480,22 +478,30 @@ impl DeviceList {
 }
 
 impl IntoIterator for DeviceList {
-    type Item = Device;
+    type Item = Arc<Mutex<Device>>;
     type IntoIter = std::vec::IntoIter<Self::Item>;
     fn into_iter(self) -> Self::IntoIter {
         self.devices.into_iter()
     }
 }
 
+/// Executes a bluetoothctl command, and calls output_fn(stdout, stderr) for the returned success
+/// value
+fn cli_cmd<F>(args: Vec<&str>, output_fn: F) -> bool
+    where F: Fn(String, String) -> bool
+    {
+    Command::new("bluetoothctl")
+        .args(args)
+        .output().is_ok_and(|output| {
+            let out = String::from_utf8(output.stdout).unwrap_or("".to_string());
+            let err = String::from_utf8(output.stderr).unwrap_or("".to_string());
+            output_fn(out, err)
+        })
+}
+
+
 /// Attempts to set the bluetooth pairable state to the value of 
 /// new_state and returns whether the action was successful
 pub fn pairable(new_state: bool) -> bool {
-    Command::new("bluetoothctl")
-        .args(["pairable", if new_state {"on"} else {"off"}])
-        .output().is_ok_and(|output| {
-            if let Ok(out) = String::from_utf8(output.stdout) {
-                return out.contains("succeeded");
-            };
-            false
-        })
+    cli_cmd(vec!["pairable", if new_state {"on"} else {"off"}], |out, _| out.contains("succeeded"))
 }
