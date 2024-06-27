@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     io::{stdout, IsTerminal, Write}, 
     process::{Command, Output, Stdio}, 
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, thread,
 };
 use regex::Regex;
 use colored::*;
@@ -120,7 +120,7 @@ impl Device {
             self.paired = Some(true);
             println!("{} paired.", self.name_colored());
         } else {
-            eprintln!("Could not pair {}.", self.name_colored());
+            println!("Could not pair {}.", self.name_colored());
         }
         ret
     }
@@ -139,28 +139,6 @@ impl Device {
         success
     }
 
-    /// Attempts to trust 
-    pub fn trust(&mut self) -> bool {
-        let success = cli_cmd(vec!["trust", &self.address], |out, _| 
-            out.contains(&("Changing".to_owned() + &self.address + " trust succeeded"))
-        );
-        if success {
-            self.trusted = Some(true);
-        }
-        success
-    }
-
-    /// Untrusts the device
-    pub fn untrust(&mut self) -> bool {
-        let success = cli_cmd(vec!["remove", &self.address], |out, _| 
-            out.contains(&("Changing".to_owned() + &self.address + " untrust succeeded"))
-        );
-        if success {
-            self.trusted = Some(false);
-        }
-        success
-    }
-
     /// Attempts to connect to device
     pub fn connect(&mut self) -> bool {
         println!("Attempting to connect with {}...", self.name_colored());
@@ -170,6 +148,8 @@ impl Device {
         if success {
             self.connected = Some(true);
             println!("{} connected.", self.name_colored());
+        } else {
+            println!("Could not connect {}.", self.name_colored());
         }
         success
     }
@@ -183,6 +163,8 @@ impl Device {
         if success {
             self.connected = Some(false);
             println!("{} disconnected.", self.name_colored());
+        } else {
+            println!("Could not disconnect {}.", self.name_colored());
         }
         success
     }
@@ -246,6 +228,31 @@ impl Device {
         // len should match amount of characters because of limitation to UTF-8
         self.name.len().try_into().expect("Name length should adhere to bluetooth specification")
     }
+}
+
+/// Macro for DeviceList, used to asyncronously call a method on all devices in the list
+/// and return the sum of the return values of the successful method calls (usuallly
+/// evaluating to the amount of devices paired or similar)
+macro_rules! _async_all_devices {
+    ($func:ident, $x:ident) => {
+        pub fn $func(&self) -> i32 {
+            let mut threads = Vec::new();
+            for device in &self.devices {
+                let device = Arc::clone(&device);
+                threads.push(thread::spawn(move || {
+                    let mut device = device.lock().expect("Mutex should not be poisoned.");
+                    i32::from(device.$x())
+                }));
+            }
+            let mut ret_count: i32 = 0;
+            for join_handle in threads {
+                if let Ok(thread_ret) = join_handle.join() {
+                    ret_count += thread_ret;
+                }
+            }
+            ret_count
+        }
+    };
 }
 
 type Devices = Vec<Arc<Mutex<Device>>>;
@@ -475,6 +482,11 @@ impl DeviceList {
         }
         let _ = writeln!(stdout);
     }
+    
+    _async_all_devices!(pair_all, pair);
+    _async_all_devices!(unpair_all, unpair);
+    _async_all_devices!(connect_all, connect);
+    _async_all_devices!(disconnect_all, disconnect);
 }
 
 impl IntoIterator for DeviceList {

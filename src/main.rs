@@ -101,18 +101,18 @@ fn main() {
             devicelist.print(*linewise, *long_output);
         }
         Some(Commands::Connect { name, full_match }) => {
-            devicelist.fill(None);
-            for device in devicelist.filtered_name(name, get_behaviour(*full_match)) {
-                let mut device = device.lock().expect("Mutex should not be poisoned.");
-                device.connect();
-            };
+            let count = devicelist
+                .fill(None)
+                .filtered_name(name, get_behaviour(*full_match))
+                .connect_all();
+            println!("Connected {} devices.", count);
         }
         Some(Commands::Disconnect { name, full_match }) => {
-            devicelist.fill(None);
-            for device in devicelist.filtered_name(name, get_behaviour(*full_match)) {
-                let mut device = device.lock().expect("Mutex should not be poisoned.");
-                device.disconnect();
-            };
+            let count = devicelist
+                .fill(None)
+                .filtered_name(name, get_behaviour(*full_match))
+                .disconnect_all();
+            println!("Disconnected {} devices.", count);
         }
         Some(Commands::Info { name, full_match }) => {
             devicelist.fill(None);
@@ -124,24 +124,18 @@ fn main() {
         }
         Some(Commands::Pair { name, full_match, timeout }) => {
             println!("Scanning for nearby pairable devices...");
-            let mut devices_added = 0;
-            devicelist.fill(get_timeout(timeout, Some(5)));
-            for device in devicelist.filtered_name(name, get_behaviour(*full_match)) {
-                let mut device = device.lock().expect("Mutex should not be poisoned.");
-                if device.pair() {
-                    devices_added += 1;
-                    device.trust();
-                    device.connect();
-                }
-            };
-            println!("Paired {} devices.", devices_added);
+            let count = devicelist
+                .fill(get_timeout(timeout, Some(5)))
+                .filtered_name(name, get_behaviour(*full_match))
+                .pair_all();
+            println!("Paired {} devices.", count);
         }
         Some(Commands::Unpair { name, full_match }) => {
-            devicelist.fill(None);
-            for device in devicelist.filtered_name(name, get_behaviour(*full_match)) {
-                let mut device = device.lock().expect("Mutex should not be poisoned.");
-                device.unpair();
-            }
+            let count = devicelist
+                .fill(None)
+                .filtered_name(name, get_behaviour(*full_match))
+                .unpair_all();
+            println!("Unpaired {} devices.", count);
         }
         None => {
             devicelist.fill(None);
