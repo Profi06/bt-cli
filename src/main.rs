@@ -1,146 +1,137 @@
 mod bluetooth;
 
-use clap::{Parser, Subcommand};
+use clap::{command, value_parser, Arg, ArgAction, Command};
 use std::env;
 use bluetooth::*;
 
-
-#[derive(Parser)]
-#[command(version, about, long_about = None)]
-#[command(propagate_version = true)]
-struct BtCli {
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-
-#[derive(Subcommand, Clone)]
-enum Commands {
-    /// List bluetooth devices
-    Ls {
-        /// use a long listing format
-        #[arg(short, long, default_value_t = false)]
-        long_output: bool,
-        /// Only print one device per line. Has no effect on 
-        /// long listing format, where this is always the case
-        #[arg(short = '1', long, default_value_t = false)]
-        linewise: bool, 
-
-        /// Scan for nearby discoverable unpaired 
-        /// devices and include them in the output
-        #[arg(short = 'a', long = "add_unpaired")]
-        add_unpaired: bool,
-        /// Use with --add-unpaired or -a to
-        /// end device scan after timeout seconds.
-        /// Default is environment variable BT_TIMEOUT or 5
-        #[arg(short, long)]
-        timeout: Option<u32>, 
-    },
-    /// Connect to a bluetooth device
-    Connect {
-        /// Name of the device to connect
-        name: String,
-
-        /// If false the device name must only contain the given name, otherwise it must
-        /// match exactly.
-        #[arg(short, long, default_value_t = false)]
-        full_match: bool,
-    },
-    /// Disconnect from a bluetooth device
-    Disconnect {
-        /// Name of the device to disconnect
-        name: String,
-        
-        /// If false the device name must only contain the given name, otherwise it must
-        /// match exactly.
-        #[arg(short, long, default_value_t = false)]
-        full_match: bool,
-    },
-    /// Get detailed information about a bluetooth device
-    Info {
-        /// Name of the device
-        name: String,
-        
-        /// If false the device name must only contain the given name, otherwise it must
-        /// match exactly.
-        #[arg(short, long, default_value_t = false)]
-        full_match: bool,
-    },
-    /// Pair with a bluetooth device
-    Pair {
-        /// Name of the device to pair
-        name: String,
-        
-        /// If false the device name must only contain the given name, otherwise it must
-        /// match exactly.
-        #[arg(short, long, default_value_t = false)]
-        full_match: bool,
-
-        /// timeout for scanning and pairing attempts in seconds
-        #[arg(short, long)]
-        timeout: Option<u32>, 
-    },
-    /// Remove a bluetooth device
-    Unpair {
-        /// Name of the device to unpair
-        name: String,
-
-        /// If false the device name must only contain the given name, otherwise it must
-        /// match exactly.
-        #[arg(short, long, default_value_t = false)]
-        full_match: bool,
-    },
-}
-
 fn main() {
+    let name_arg = Arg::new("name")
+        .index(1)
+        .required(true)
+        .help("Device name");
+    let full_match_arg = Arg::new("full_match")
+        .short('f').long("full_match")
+        .action(ArgAction::SetTrue)
+        .help("If set the device name must be an exact match");
+    let timeout_arg = Arg::new("timeout")
+        .short('t').long("timeout")
+        .value_parser(value_parser!(u32))
+        .help("Timeout for scanning and pairing attempts in seconds")
+        .long_help("Timeout for scanning and pairing attempts in seconds\nDefault can be controlled with environment variable BT_TIMEOUT");
+
+    let matches = command!()
+        .propagate_version(true)
+        .subcommands([
+            Command::new("list")
+                .visible_alias("ls")
+                .before_help("List bluetooth devices")
+                .args([
+                    Arg::new("long_output")
+                        .short('l').long("long_output")
+                        .help("Use a long listing format")
+                        .action(ArgAction::SetTrue),
+                    Arg::new("linewise")
+                        .short('1').long("linewise")
+                        .help("Only print one device per line")
+                        .long_help("Only print one device per line. Has no effect on\nlong listing format, where this is always the case")
+                        .action(ArgAction::SetTrue), 
+                    Arg::new("all")
+                        .short('a').long("all")
+                        .help("Scan for nearby discoverable unpaired devices and include them in the output")
+                        .action(ArgAction::SetTrue),
+                    timeout_arg.clone()
+                        .requires("all")
+                ]),
+            Command::new("connect")
+                .visible_alias("c")
+                .before_help("Connect to a bluetooth device")
+                .args([name_arg.clone(), full_match_arg.clone()]),
+            Command::new("disconnect")
+                .visible_alias("dc")
+                .before_help("Disconnect from a bluetooth device")
+                .args([name_arg.clone(), full_match_arg.clone()]),
+            Command::new("info")
+                .visible_alias("i")
+                .before_help("Get detailed information about a bluetooth device")
+                .args([name_arg.clone(), full_match_arg.clone()]),
+            Command::new("pair")
+                .visible_alias("p")
+                .alias("add")
+                .before_help("Pair with a bluetooth device")
+                .args([name_arg.clone(), full_match_arg.clone(), timeout_arg.clone()]),
+            Command::new("unpair")
+                .visible_alias("up")
+                .aliases(["remove", "rm"])
+                .before_help("Remove a bluetooth device")
+                .args([name_arg.clone(), full_match_arg.clone()]),
+        ])
+        .get_matches();
+
     // Shell
-    let cli = BtCli::parse();
     let mut devicelist = DeviceList::new();
-    match &cli.command {
-        Some(Commands::Ls { long_output, linewise, add_unpaired, timeout }) => {
-            devicelist.fill(if *add_unpaired { get_timeout(timeout, Some(30)) } else { None });
-            devicelist.print(*linewise, *long_output);
+    match matches.subcommand() {
+        Some(("list", sub_matches)) => {
+            let long_output = sub_matches.get_flag("long_output");
+            let linewise = sub_matches.get_flag("linewise");
+            let all = sub_matches.get_flag("all");
+            let timeout = get_timeout(&sub_matches.get_one("timeout").copied(), Some(30));
+
+            devicelist.fill(if all { timeout } else { None });
+            devicelist.print(linewise, long_output);
         }
-        Some(Commands::Connect { name, full_match }) => {
+        Some(("connect", sub_matches)) => {
+            let name = sub_matches.get_one::<String>("name").expect("name is required");
+            let full_match = sub_matches.get_flag("full_match");
             let count = devicelist
                 .fill(None)
-                .filtered_name(name, get_behaviour(*full_match))
+                .filtered_name(name, get_behaviour(full_match))
                 .connect_all();
             println!("Connected {} devices.", count);
         }
-        Some(Commands::Disconnect { name, full_match }) => {
+        Some(("disconnect", sub_matches)) => {
+            let name = sub_matches.get_one::<String>("name").expect("name is required");
+            let full_match = sub_matches.get_flag("full_match");
             let count = devicelist
                 .fill(None)
-                .filtered_name(name, get_behaviour(*full_match))
+                .filtered_name(name, get_behaviour(full_match))
                 .disconnect_all();
             println!("Disconnected {} devices.", count);
         }
-        Some(Commands::Info { name, full_match }) => {
+        Some(("info", sub_matches)) => {
+            let name = sub_matches.get_one::<String>("name").expect("name is required");
+            let full_match = sub_matches.get_flag("full_match");
             devicelist.fill(None);
-            for device in devicelist.filtered_name(name, get_behaviour(*full_match)) {
+            for device in devicelist.filtered_name(name, get_behaviour(full_match)) {
                 let mut device = device.lock().expect("Mutex should not be poisoned.");
                 device.update_info();
                 println!("{}", device.info_colored());
             }
         }
-        Some(Commands::Pair { name, full_match, timeout }) => {
+        Some(("pair", sub_matches)) => {
+            let name = sub_matches.get_one::<String>("name").expect("name is required");
+            let full_match = sub_matches.get_flag("full_match");
+            let timeout = get_timeout(&sub_matches.get_one("timeout").copied(), Some(5));
             println!("Scanning for nearby pairable devices...");
             let count = devicelist
-                .fill(get_timeout(timeout, Some(5)))
-                .filtered_name(name, get_behaviour(*full_match))
+                .fill(timeout)
+                .filtered_name(name, get_behaviour(full_match))
                 .pair_all();
             println!("Paired {} devices.", count);
         }
-        Some(Commands::Unpair { name, full_match }) => {
+        Some(("unpair", sub_matches)) => {
+            let name = sub_matches.get_one::<String>("name").expect("name is required");
+            let full_match = sub_matches.get_flag("full_match");
             let count = devicelist
                 .fill(None)
-                .filtered_name(name, get_behaviour(*full_match))
+                .filtered_name(name, get_behaviour(full_match))
                 .unpair_all();
             println!("Unpaired {} devices.", count);
-        }
+        },
         None => {
             devicelist.fill(None);
             devicelist.print(false, false);
         },
+        Some(_) => unreachable!(),
     }
 }
 
