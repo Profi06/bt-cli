@@ -1,5 +1,6 @@
 mod bluetooth;
 mod term_utils;
+mod bluez;
 
 use clap::{command, value_parser, Arg, ArgAction, Command};
 use std::env;
