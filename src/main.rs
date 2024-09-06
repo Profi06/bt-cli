@@ -1,4 +1,5 @@
 mod bluetooth;
+mod term_utils;
 
 use clap::{command, value_parser, Arg, ArgAction, Command};
 use std::env;
@@ -100,12 +101,9 @@ fn main() {
         Some(("info", sub_matches)) => {
             let name = sub_matches.get_one::<String>("name").expect("name is required");
             let full_match = sub_matches.get_flag("full_match");
-            devicelist.fill(None);
-            for device in devicelist.filtered_name(name, get_behaviour(full_match)) {
-                let mut device = device.lock().expect("Mutex should not be poisoned.");
-                device.update_info();
-                println!("{}", device.info_colored());
-            }
+            devicelist.fill(None)
+                .filtered_name(name, get_behaviour(full_match)) 
+                .print_info_colored_all();
         }
         Some(("pair", sub_matches)) => {
             let name = sub_matches.get_one::<String>("name").expect("name is required");

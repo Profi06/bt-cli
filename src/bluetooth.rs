@@ -1,12 +1,11 @@
+use crate::term_utils::get_termsize;
 use std::{
     collections::HashMap,
-    io::{stdout, IsTerminal, Write}, 
+    io::{self, stdout, IsTerminal, Write}, 
     process::{Command, Output, Stdio}, 
     sync::{Arc, Mutex}, thread,
 };
 use regex::Regex;
-use colored::*;
-use termsize::{self, Size};
 
 #[derive(Debug, Clone)]
 pub struct Device {
@@ -171,31 +170,33 @@ impl Device {
 
     /// Colors str based on device state. 
     /// Used by some *_colored methods.
-    fn to_colored(&self, str: &str) -> ColoredString {
-        let mut return_value : ColoredString = str.into();
+    fn to_colored(&self, str: &str) -> String {
         if self.paired != Some(true) {
-            return_value = return_value.bright_black();
+            // dim, white
+            format!("\x1b[2;37m{}\x1b[0m", str)
         }
-        if self.connected == Some(true) {
-            return_value = return_value.bold().blue();
-        } 
-        return_value
+        else if self.connected == Some(true) {
+            // Bold, blue
+            format!("\x1b[1;34m{}\x1b[0m", str)
+        } else {
+            str.to_owned()
+        }
     }
 
     /// Returns the device name with formatting.
-    pub fn name_colored(&self) -> ColoredString {
+    pub fn name_colored(&self) -> String {
         self.to_colored(&self.name)
     }
 
     /// normal output of name_colored with  if name
     /// contains whitespace, otherwise placeholder is added
-    pub fn quoted_name_colored(&self, quotes: &str, placeholder: &str) -> ColoredString {
+    pub fn quoted_name_colored(&self, quotes: &str, placeholder: &str) -> String {
         let added = if self.name.contains(char::is_whitespace) { quotes } else { placeholder };
-        self.to_colored(&(added.to_owned() + &self.name + added))
+        self.to_colored(&format!("{added}{}{added}", &self.name))
     }
 
-    pub fn info_colored(&self) -> ColoredString {
-        let mut return_value = format!("{} {}", self.address, self.name_colored());
+    pub fn print_info_colored(&self) {
+        let mut print_str = format!("{} {}", self.address, self.name_colored());
         let print_props = Vec::from([
             ("\n\tAlias: ", InfoType::OptString(&self.alias)),
             ("\n\tIcon: ", InfoType::OptString(&self.icon)),
@@ -207,18 +208,18 @@ impl Device {
             ("\n\tBattery Percentage: ", InfoType::OptBattery(&self.battery)),
         ]);
         for (prefix, property) in print_props {
-            match property {
-                InfoType::OptString(Some(propval)) => return_value = return_value + prefix + propval,
-                InfoType::OptBoolean(Some(propval)) => return_value = return_value + &format!("{prefix}{}", if *propval {"yes".green()} else {"no".red()}),
-                InfoType::OptBattery(Some(percentage)) => return_value = return_value + prefix + &format!("{}", match percentage {
-                    70.. => percentage.to_string().green(),
-                    30.. => percentage.to_string().yellow(),
-                    _ => percentage.to_string().red(),
-                }),
-                _ => (),
+            print_str = print_str + &match property {
+                InfoType::OptString(Some(propval)) => format!("{prefix}{propval}"),
+                InfoType::OptBoolean(Some(propval)) => format!("{prefix}{}", if *propval {"\x1b[32myes\x1b[0m"} else {"\x1b[31mno\x1b[0m"}),
+                InfoType::OptBattery(Some(percentage)) => format!("{prefix}{}{}\x1b[0m", match percentage {
+                    70.. => "\x1b[32m", // green 
+                    30.. => "\x1b[33m", // yellow
+                    _ => "\x1b[31m", // red
+                }, percentage),
+                _ => String::new(),
             }
         }
-        return_value.into()
+        println!("{print_str}");
     }
 
     // Returns the length of the device name (as an u8 because
@@ -267,6 +268,7 @@ pub struct DeviceList {
     min_name_len: u8,
 }
 
+#[allow(dead_code)]
 pub enum FilterBehaviour {
     Full,
     Contains,
@@ -287,12 +289,20 @@ impl DeviceList {
         let mut devices_args = vec!["devices"];
 
         if let Some(scan_secs) = scan_secs {
+            let do_print = io::stdout().is_terminal();
+            if do_print {
+                print!("\x1b[2;37mScanning for devices...\x1b[0m");
+                let _ = stdout().flush();
+            }
             // bluetoothctl scan for unpaired nearby devices
             let _ = Command::new("bluetoothctl")
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .args(["--timeout", &scan_secs.to_string(), "scan", "on"])
                 .status();
+            if do_print {
+                print!("\x1b[1K\r");
+            }
         } else {
             devices_args.push("Paired");
         }
@@ -364,8 +374,8 @@ impl DeviceList {
     }
 
     /// Returns the name of the device with decorations depending on state of self
-    pub fn correctly_quoted_device_name(&self, device: &Device) -> ColoredString {
-        if self.quote_names {
+    pub fn correctly_quoted_device_name(&self, device: &Device) -> String {
+        if false && self.quote_names {
             device.quoted_name_colored("'", " ")
         } else {
             device.name_colored()
@@ -407,9 +417,8 @@ impl DeviceList {
         // First find highest amount of possible colums and the best fit column widths
         #[derive(Debug)]
         struct ColsInfo { widths: Vec<u8>, total_w: u16 }
-        let max_w: u16 = match termsize::get() {
-            // cols is terminal width in chars
-            Some(Size {rows: _, cols}) => cols,
+        let max_w: u16 = match get_termsize() {
+            Some(size) => size.cols,
             _ => 80,
         }.try_into().unwrap_or(80);
         // Checked div prevents divide by zero for empty names
@@ -424,7 +433,7 @@ impl DeviceList {
             return;
         }
 
-        // If there are whitespaced names, also account for space used by qoutes
+        // If there are whitespaced names, also account for space used by quotes
         let extra_char_num = 2 + 2 * u8::from(self.quote_names);
         // Infos for every column amount considered
         let mut col_infos: Vec<ColsInfo> = Vec::new();
@@ -481,6 +490,14 @@ impl DeviceList {
             let _ = write!(stdout, "{printed_str}{padding}");
         }
         let _ = writeln!(stdout);
+    }
+
+    pub fn print_info_colored_all(&self) {
+        for device in &self.devices {
+            let mut device = device.lock().expect("Mutex should not be poisoned.");
+            device.update_info();
+            device.print_info_colored();
+        }
     }
     
     _async_all_devices!(pair_all, pair);

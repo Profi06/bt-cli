@@ -2,7 +2,7 @@
 name = "bt"
 description = "An intuitive Bluetooth CLI"
 authors = ["Profi06"]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,6 +10,4 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.5.4", features = ["cargo"] }
 clap_complete = "4.5.1"
-colored = "2"
-termsize = "0.1"
 regex = "1.10.4"
