@@ -1,3 +1,4 @@
+// vim: cc=81
 use crate::term_utils;
 use std::{
     collections::HashMap,
@@ -5,7 +6,6 @@ use std::{
     process::{Command, Output, Stdio}, 
     sync::{Arc, Mutex}, thread,
 };
-use dbus::arg::Append;
 use regex::Regex;
 
 const ANSI_RESET: &str = "\x1b[0m";
@@ -132,7 +132,7 @@ impl Device {
         self
     }
 
-    /// Attempts to pair 
+    /// Attempts to pair with device
     pub fn pair(&mut self) -> bool {
         println!("Attempting to pair with {}...", self.get_name());
         pairable(true);
@@ -235,6 +235,7 @@ impl Device {
             self.ansi_color_reset())
     }
 
+    /// Will print detailed information about the device.
     pub fn print_info(&self) {
         let mut print_str = format!("{} {}", 
             self.address, self.get_name());
@@ -274,16 +275,16 @@ impl Device {
         println!("{print_str}");
     }
 
-    // Returns the length of the device name (as an u8 because
-    // the bluetooth specification limits name length to 248.
-    // See Section 6.23: https://www.bluetooth.com/specifications/core54-html/)
+    /// Returns the length of the device name (as an u8 because
+    /// the bluetooth specification limits name length to 248.
+    /// See Section 6.23: https://www.bluetooth.com/specifications/core54-html/)
     pub fn name_len(&self) -> u8 {
         self.name.chars().count().try_into()
             .expect("Name length should adhere to bluetooth specification")
     }
 
-    // Sets whether strings returned by name functions will be colored with 
-    // ANSI color codes
+    /// Sets whether strings returned by name functions will be colored with 
+    /// ANSI color codes
     pub fn set_name_in_color(&mut self, val: bool) {
         self.name_in_color = val;
     }
@@ -293,7 +294,7 @@ impl Device {
 /// and return the sum of the return values of the successful method calls (usuallly
 /// evaluating to the amount of devices paired or similar)
 macro_rules! _async_all_devices {
-    ($func:ident, $x:ident) => {
+    ($func:ident, $x:ident) => { 
         pub fn $func(&self) -> i32 {
             let mut threads = Vec::new();
             for device in &self.devices {
@@ -327,7 +328,6 @@ pub struct DeviceList {
     min_name_len: u8,
 }
 
-#[allow(dead_code)]
 pub enum FilterBehaviour {
     Full,
     Contains,
@@ -336,6 +336,7 @@ pub enum FilterBehaviour {
 }
 
 impl DeviceList {
+    /// Create a new empty device list
     pub fn new() -> DeviceList {
         DeviceList { 
             devices: Vec::new(), 
@@ -346,6 +347,8 @@ impl DeviceList {
         }
     }
 
+    /// Fills the device list with devices, optionally scanning for unpaired
+    /// devices for scan_secs seconds.
     pub fn fill(&mut self, scan_secs : Option<u32>) -> &mut DeviceList {
         let mut devices_args = vec!["devices"];
 
@@ -376,8 +379,8 @@ impl DeviceList {
             .unwrap_or(String::new());
         for line in output_str.lines() {
             let mut split = line.splitn(3, ' ');
-            // First should always be "Device" and line is therefore invalid if not
-            // (for example by delayed device change notifications from scan)
+            // First should always be "Device" and line is therefore invalid if 
+            // not (for example by delayed device change notifications from scan)
             if split.next() != Some("Device") {
                 continue;
             }
@@ -394,6 +397,7 @@ impl DeviceList {
         self
     }
 
+    /// Returns a filtered device list
     pub fn filtered<F>(&self, filter: F) -> DeviceList 
         where F: Fn(&Device) -> bool {
         let mut retval = DeviceList::new();
@@ -409,8 +413,8 @@ impl DeviceList {
         retval
     } 
 
-    /// Returns devices in device list with name matching the filterstr, with "matching"
-    /// defined according to behaviour.
+    /// Returns devices in device list with name matching the filterstr, with 
+    /// "matching" defined according to behaviour.
     pub fn filtered_name(&self, filterstr : &str, behaviour: FilterBehaviour) -> DeviceList {
         match behaviour {
             FilterBehaviour::Full => self.filtered_name_full(filterstr),
@@ -456,16 +460,16 @@ impl DeviceList {
 
     pub fn print(&mut self, linewise: bool, long_output: bool) {
         if !linewise && !long_output {
-            self.print_columns();
+            self.print_lines();
         } else if linewise {
-            self.print_line();
+            self.print_fullline();
         } else if long_output {
             self.print_long();
         }
     }
 
-    /// Prints each device on its own line
-    pub fn print_line(&mut self) {
+    /// Prints each device on its own line (similar to GNU ls -1)
+    pub fn print_fullline(&mut self) {
         let mut stdout = stdout().lock();
         for device in &self.devices {
             let mut device = device.lock().expect("Mutex should not be poisoned.");
@@ -475,7 +479,7 @@ impl DeviceList {
         }
     }
 
-    /// Prints each device in long format (on its own line)
+    /// Prints each device in long format (on its own line) similar to GNU ls -l
     pub fn print_long(&mut self) {
         let mut stdout = stdout().lock();
         for device in &self.devices {
@@ -486,8 +490,10 @@ impl DeviceList {
         }
     }
 
-    pub fn print_columns(&mut self) {
-        // First find highest amount of possible colums and the best fit column widths
+    /// Prints multiple devices per line similar to GNU ls -x
+    pub fn print_lines(&mut self) {
+        // First find highest amount of possible columns and the best fit column 
+        // widths
         #[derive(Debug)]
         struct ColsInfo { widths: Vec<u8>, total_w: u16 }
         let max_w: u16 = match term_utils::get_termsize() {
@@ -502,7 +508,7 @@ impl DeviceList {
         // Fallback to print_line if max_name_len > max_w
         // or max_name_len == 0 for the sake of simplicity
         if min_cols == 0 {
-            self.print_line();
+            self.print_fullline();
             return;
         }
 
@@ -514,12 +520,14 @@ impl DeviceList {
         for cols_num in min_cols..=max_cols {
             col_infos.push(ColsInfo { 
                 widths: vec![0; cols_num.into()], 
-                total_w: (u16::from(extra_char_num) * cols_num).try_into().unwrap_or(0),
+                total_w: (u16::from(extra_char_num) * cols_num)
+                    .try_into().unwrap_or(0),
             })
         };
 
         for (idx, device) in self.devices.iter().enumerate() {
             let device = device.lock().expect("Mutex should not be poisoned.");
+            let device_name_len = device.name_len();
             for (add_cols, col_info) in col_infos.iter_mut().enumerate() {
                 // This amount of device columns has already been proven 
                 // unusable. Skip to next column amount option
@@ -530,7 +538,6 @@ impl DeviceList {
                 // Calculate column device would be displayed in 
                 // add_cols + min_cols is amount of columns
                 let idx = idx % (add_cols + usize::from(min_cols));
-                let device_name_len = device.name_len();
                 if col_info.widths[idx] < device_name_len {
                     let size_incr = device_name_len - col_info.widths[idx];
                     col_info.widths[idx] += size_incr;
@@ -554,8 +561,8 @@ impl DeviceList {
         let mut stdout = stdout().lock();
         for (idx, device) in self.devices.iter().enumerate() {
             let mut device = device.lock().expect("Mutex should not be poisoned.");
-            // Output newline when idx 0 is reached (except for first line, where newline is
-            // assumed to already be present)
+            // Output newline when idx 0 is reached (except for first line, 
+            // where newline is assumed to already be present)
             if idx != 0 && idx % col_info.widths.len() == 0 {
                 let _ = writeln!(stdout, "");
             }
@@ -570,6 +577,7 @@ impl DeviceList {
         let _ = writeln!(stdout);
     }
 
+    /// Calls print_info on all devices
     pub fn print_info_all(&self) {
         for device in &self.devices {
             let mut device = device.lock().expect("Mutex should not be poisoned.");
@@ -583,13 +591,13 @@ impl DeviceList {
     _async_all_devices!(connect_all, connect);
     _async_all_devices!(disconnect_all, disconnect);
 
-    // Sets whether quotes will be added if there is a
-    // device name containing whitespace
+    /// Sets whether quotes will be added if there is a
+    /// device name containing whitespace
     pub fn set_quote_names(&mut self, val: bool) {
         self.quote_names = val;
     }
 
-    // Sets whether output will be colored with ANSI color codes
+    /// Sets whether output will be colored with ANSI color codes
     pub fn set_print_in_color(&mut self, val: bool) {
         self.print_in_color = val;
     }
@@ -603,8 +611,8 @@ impl IntoIterator for DeviceList {
     }
 }
 
-/// Executes a bluetoothctl command, and calls output_fn(stdout, stderr) for the returned success
-/// value
+/// Executes a bluetoothctl command, and calls output_fn(stdout, stderr) for 
+/// the returned success value
 fn cli_cmd<F>(args: Vec<&str>, output_fn: F) -> bool
     where F: Fn(String, String) -> bool
     {
@@ -621,5 +629,6 @@ fn cli_cmd<F>(args: Vec<&str>, output_fn: F) -> bool
 /// Attempts to set the bluetooth pairable state to the value of 
 /// new_state and returns whether the action was successful
 pub fn pairable(new_state: bool) -> bool {
-    cli_cmd(vec!["pairable", if new_state {"on"} else {"off"}], |out, _| out.contains("succeeded"))
+    cli_cmd(vec!["pairable", if new_state {"on"} else {"off"}], |out, _| 
+        out.contains("succeeded"))
 }
