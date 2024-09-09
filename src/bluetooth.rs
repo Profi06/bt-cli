@@ -1,11 +1,32 @@
-use crate::term_utils::get_termsize;
+use crate::term_utils;
 use std::{
     collections::HashMap,
     io::{self, stdout, IsTerminal, Write}, 
     process::{Command, Output, Stdio}, 
     sync::{Arc, Mutex}, thread,
 };
+use dbus::arg::Append;
 use regex::Regex;
+
+const ANSI_RESET: &str = "\x1b[0m";
+const ANSI_BLACK: &str = "\x1b[30m";
+const ANSI_RED: &str = "\x1b[31m";
+const ANSI_GREEN: &str = "\x1b[32m";
+const ANSI_YELLOW: &str = "\x1b[33m";
+const ANSI_BLUE: &str = "\x1b[34m";
+const ANSI_MAGENTA: &str = "\x1b[35m";
+const ANSI_CYAN: &str = "\x1b[36m";
+const ANSI_WHITE: &str = "\x1b[37m";
+const ANSI_DEFAULT: &str = "\x1b[39m";
+const ANSI_BLACK_BG: &str = "\x1b[40m";
+const ANSI_RED_BG: &str = "\x1b[41m";
+const ANSI_GREEN_BG: &str = "\x1b[42m";
+const ANSI_YELLOW_BG: &str = "\x1b[43m";
+const ANSI_BLUE_BG: &str = "\x1b[44m";
+const ANSI_MAGENTA_BG: &str = "\x1b[45m";
+const ANSI_CYAN_BG: &str = "\x1b[46m";
+const ANSI_WHITE_BG: &str = "\x1b[47m";
+const ANSI_DEFAULT_BG: &str = "\x1b[49m";
 
 #[derive(Debug, Clone)]
 pub struct Device {
@@ -23,6 +44,9 @@ pub struct Device {
 
     battery: Option<u8>,
     icon: Option<String>,
+
+    // Allow ANSI code color in output from this struct 
+    name_in_color: bool,
 }
 
 // Used for conversion from bluetoothctl to Device
@@ -52,6 +76,7 @@ impl Device {
             connected: None,
             battery: None,
             icon: None,
+            name_in_color: true,
         }
     }
 
@@ -109,94 +134,110 @@ impl Device {
 
     /// Attempts to pair 
     pub fn pair(&mut self) -> bool {
-        println!("Attempting to pair with {}...", self.name_colored());
+        println!("Attempting to pair with {}...", self.get_name());
         pairable(true);
         let ret = cli_cmd(vec!["pair", &self.address], |out, err| 
-            out.contains("Pairing successful") || err.contains("org.bluez.Error.AlreadyExists")
+            out.contains("Pairing successful") 
+                || err.contains("org.bluez.Error.AlreadyExists")
         );
         pairable(false);
         if ret {
             self.paired = Some(true);
-            println!("{} paired.", self.name_colored());
+            println!("{} paired.", self.get_name());
         } else {
-            println!("Could not pair {}.", self.name_colored());
+            println!("Could not pair {}.", self.get_name());
         }
         ret
     }
 
     /// Unpairs the device
     pub fn unpair(&mut self) -> bool {
-        println!("Attempting to remove {}...", self.name_colored());
-        let success = cli_cmd(vec!["remove", &self.address], |out, _| out.contains("Device has been removed"));
+        println!("Attempting to remove {}...", self.get_name());
+        let success = cli_cmd(vec!["remove", &self.address], |out, _| 
+            out.contains("Device has been removed"));
         if success {
             self.paired = Some(false);
             self.connected = Some(false);
-            println!("{} unpaired.", self.name_colored());
+            println!("{} unpaired.", self.get_name());
         } else {
-            println!("Could not unpair {}.", self.name_colored());
+            println!("Could not unpair {}.", self.get_name());
         }
         success
     }
 
     /// Attempts to connect to device
     pub fn connect(&mut self) -> bool {
-        println!("Attempting to connect with {}...", self.name_colored());
+        println!("Attempting to connect with {}...", self.get_name());
         let success = cli_cmd(vec!["connect", &self.address], |out, _|
             out.contains("Connection successful")
         );
         if success {
             self.connected = Some(true);
-            println!("{} connected.", self.name_colored());
+            println!("{} connected.", self.get_name());
         } else {
-            println!("Could not connect {}.", self.name_colored());
+            println!("Could not connect {}.", self.get_name());
         }
         success
     }
 
     /// Attempts to disconnect from device
     pub fn disconnect(&mut self) -> bool {
-        println!("Attempting to disconnect from {}...", self.name_colored());
+        println!("Attempting to disconnect from {}...", self.get_name());
         let success = cli_cmd(vec!["disconnect", &self.address], |out, _|
             out.contains(&("[CHG] Device ".to_owned() + &self.address + " Connected: no"))
         );
         if success {
             self.connected = Some(false);
-            println!("{} disconnected.", self.name_colored());
+            println!("{} disconnected.", self.get_name());
         } else {
-            println!("Could not disconnect {}.", self.name_colored());
+            println!("Could not disconnect {}.", self.get_name());
         }
         success
     }
 
-    /// Colors str based on device state. 
-    /// Used by some *_colored methods.
-    fn to_colored(&self, str: &str) -> String {
-        if self.paired != Some(true) {
-            // dim, white
-            format!("\x1b[2;37m{}\x1b[0m", str)
-        }
-        else if self.connected == Some(true) {
-            // Bold, blue
-            format!("\x1b[1;34m{}\x1b[0m", str)
+    /// ANSI color escape sequence based on device state. 
+    pub fn ansi_color_codes(&self) -> &str {
+        if !self.name_in_color {
+            "" 
+        } else if self.paired != Some(true) {
+            "\x1b[2;37m" // dim, white
+        } else if self.connected == Some(true) {
+            "\x1b[1;34m" // Bold, blue
         } else {
-            str.to_owned()
+            "\x1b[22;39m" // Normal, default
         }
     }
 
-    /// Returns the device name with formatting.
-    pub fn name_colored(&self) -> String {
-        self.to_colored(&self.name)
+    /// ANSI reset escape sequence if name_in_color is true, "" else.
+    pub fn ansi_color_reset(&self) -> &str {
+        if self.name_in_color { ANSI_RESET } else { "" }
     }
 
-    /// normal output of name_colored with  if name
-    /// contains whitespace, otherwise placeholder is added
-    pub fn quoted_name_colored(&self, quotes: &str, placeholder: &str) -> String {
-        let added = if self.name.contains(char::is_whitespace) { quotes } else { placeholder };
-        self.to_colored(&format!("{added}{}{added}", &self.name))
+    /// Returns name. Includes ANSI color codes if name_in_color is true.
+    pub fn get_name(&self) -> String {
+        format!("{}{}{}", 
+            self.ansi_color_codes(), 
+            self.name,
+            self.ansi_color_reset())
     }
 
-    pub fn print_info_colored(&self) {
-        let mut print_str = format!("{} {}", self.address, self.name_colored());
+    /// Quoted name if it contains whitespace, otherwise placeholder is added 
+    /// instead. Includes ANSI color codes if name_in_color is true.
+    pub fn quoted_name(&self, quotes: &str, placeholder: &str) -> String {
+        format!("{}{2}{}{}{}",  
+            self.ansi_color_codes(), 
+            self.name,
+            if self.name.contains(char::is_whitespace) { 
+                quotes 
+            } else { 
+                placeholder 
+            },
+            self.ansi_color_reset())
+    }
+
+    pub fn print_info(&self) {
+        let mut print_str = format!("{} {}", 
+            self.address, self.get_name());
         let print_props = Vec::from([
             ("\n\tAlias: ", InfoType::OptString(&self.alias)),
             ("\n\tIcon: ", InfoType::OptString(&self.icon)),
@@ -207,15 +248,26 @@ impl Device {
             ("\n\tBlocked: ", InfoType::OptBoolean(&self.blocked)),
             ("\n\tBattery Percentage: ", InfoType::OptBattery(&self.battery)),
         ]);
+        let (ansi_red, ansi_yellow, ansi_green) = if self.name_in_color { 
+            (ANSI_RED, ANSI_YELLOW, ANSI_GREEN)
+        } else { 
+            ("", "", "") 
+        };
+        let ansi_reset = self.ansi_color_reset();
         for (prefix, property) in print_props {
             print_str = print_str + &match property {
-                InfoType::OptString(Some(propval)) => format!("{prefix}{propval}"),
-                InfoType::OptBoolean(Some(propval)) => format!("{prefix}{}", if *propval {"\x1b[32myes\x1b[0m"} else {"\x1b[31mno\x1b[0m"}),
-                InfoType::OptBattery(Some(percentage)) => format!("{prefix}{}{}\x1b[0m", match percentage {
-                    70.. => "\x1b[32m", // green 
-                    30.. => "\x1b[33m", // yellow
-                    _ => "\x1b[31m", // red
-                }, percentage),
+                InfoType::OptString(Some(propval)) => 
+                    format!("{prefix}{propval}"),
+                InfoType::OptBoolean(Some(propval)) => 
+                    format!("{prefix}{}{}{ansi_reset}", 
+                        if *propval { ansi_green } else { ansi_red },
+                        if *propval { "yes" } else { "no" }),
+                InfoType::OptBattery(Some(percentage)) => 
+                    format!("{prefix}{}{}{ansi_reset}", match percentage {
+                        70.. => ansi_green, 
+                        30.. => ansi_yellow,
+                        _ => ansi_red, 
+                    }, percentage),
                 _ => String::new(),
             }
         }
@@ -226,8 +278,14 @@ impl Device {
     // the bluetooth specification limits name length to 248.
     // See Section 6.23: https://www.bluetooth.com/specifications/core54-html/)
     pub fn name_len(&self) -> u8 {
-        // len should match amount of characters because of limitation to UTF-8
-        self.name.len().try_into().expect("Name length should adhere to bluetooth specification")
+        self.name.chars().count().try_into()
+            .expect("Name length should adhere to bluetooth specification")
+    }
+
+    // Sets whether strings returned by name functions will be colored with 
+    // ANSI color codes
+    pub fn set_name_in_color(&mut self, val: bool) {
+        self.name_in_color = val;
     }
 }
 
@@ -264,6 +322,7 @@ pub struct DeviceList {
 
     // Following properties are saved for output
     quote_names: bool,
+    print_in_color: bool,
     max_name_len: u8,
     min_name_len: u8,
 }
@@ -272,7 +331,8 @@ pub struct DeviceList {
 pub enum FilterBehaviour {
     Full,
     Contains,
-    Regex,
+    FullRegex,
+    ContainsRegex,
 }
 
 impl DeviceList {
@@ -280,6 +340,7 @@ impl DeviceList {
         DeviceList { 
             devices: Vec::new(), 
             quote_names: false, 
+            print_in_color: true,
             max_name_len: 0, 
             min_name_len: 0 
         }
@@ -289,9 +350,9 @@ impl DeviceList {
         let mut devices_args = vec!["devices"];
 
         if let Some(scan_secs) = scan_secs {
-            let do_print = io::stdout().is_terminal();
+            let do_print = io::stdout().is_terminal() && self.print_in_color;
             if do_print {
-                print!("\x1b[2;37mScanning for devices...\x1b[0m");
+                print!("\x1b[2;37mScanning for devices...{ANSI_RESET}");
                 let _ = stdout().flush();
             }
             // bluetoothctl scan for unpaired nearby devices
@@ -311,7 +372,8 @@ impl DeviceList {
             .output()
             .expect("failed to execute bluetoothctl devices");
 
-        let output_str = String::from_utf8(bluetoothctl_output.stdout).unwrap_or("".to_string());
+        let output_str = String::from_utf8(bluetoothctl_output.stdout)
+            .unwrap_or(String::new());
         for line in output_str.lines() {
             let mut split = line.splitn(3, ' ');
             // First should always be "Device" and line is therefore invalid if not
@@ -321,7 +383,8 @@ impl DeviceList {
             }
             if let (Some(address), Some(name)) = (split.next(), split.next()) {
                 self.quote_names |= name.contains(char::is_whitespace);
-                let device = Device::new(address, name);
+                let mut device = Device::new(address, name);
+                device.name_in_color = self.print_in_color;
                 self.max_name_len = self.max_name_len.max(device.name_len());
                 self.min_name_len = self.max_name_len.min(device.name_len());
                 self.devices.push(Arc::new(Mutex::new(device)));
@@ -352,7 +415,8 @@ impl DeviceList {
         match behaviour {
             FilterBehaviour::Full => self.filtered_name_full(filterstr),
             FilterBehaviour::Contains => self.filtered_name_contains(filterstr),
-            FilterBehaviour::Regex => self.filtered_name_regex(filterstr),
+            FilterBehaviour::FullRegex => self.filtered_name_full_regex(filterstr),
+            FilterBehaviour::ContainsRegex => self.filtered_name_contains_regex(filterstr),
         }
     }
     /// Returns devices in device list with given name
@@ -366,19 +430,27 @@ impl DeviceList {
     }
 
     /// Returns devices in device list with name matching regex.
-    pub fn filtered_name_regex(&self, regex: &str) -> DeviceList {
+    pub fn filtered_name_full_regex(&self, regex: &str) -> DeviceList {
         match Regex::new(regex) {
             Ok(re) => self.filtered(|device| re.is_match(&device.name)),
             Err(_) => DeviceList::new(),
         }
     }
 
+    /// Returns devices in device list with name containing a match for the regex.
+    pub fn filtered_name_contains_regex(&self, regex: &str) -> DeviceList {
+        match Regex::new(regex) {
+            Ok(re) => self.filtered(|device| re.find(&device.name).is_some()),
+            Err(_) => DeviceList::new(),
+        }
+    }
+
     /// Returns the name of the device with decorations depending on state of self
     pub fn correctly_quoted_device_name(&self, device: &Device) -> String {
-        if false && self.quote_names {
-            device.quoted_name_colored("'", " ")
+        if self.quote_names {
+            device.quoted_name("'", " ")
         } else {
-            device.name_colored()
+            device.get_name()
         }
     }
 
@@ -403,12 +475,13 @@ impl DeviceList {
         }
     }
 
+    /// Prints each device in long format (on its own line)
     pub fn print_long(&mut self) {
         let mut stdout = stdout().lock();
         for device in &self.devices {
             let mut device = device.lock().expect("Mutex should not be poisoned.");
             device.update_info();
-            let _ = writeln!(stdout, "{} {}", &device.address,
+            let _ = writeln!(stdout, "{} {}", &device.address, 
                 self.correctly_quoted_device_name(&device));
         }
     }
@@ -417,7 +490,7 @@ impl DeviceList {
         // First find highest amount of possible colums and the best fit column widths
         #[derive(Debug)]
         struct ColsInfo { widths: Vec<u8>, total_w: u16 }
-        let max_w: u16 = match get_termsize() {
+        let max_w: u16 = match term_utils::get_termsize() {
             Some(size) => size.cols,
             _ => 80,
         }.try_into().unwrap_or(80);
@@ -457,8 +530,9 @@ impl DeviceList {
                 // Calculate column device would be displayed in 
                 // add_cols + min_cols is amount of columns
                 let idx = idx % (add_cols + usize::from(min_cols));
-                if col_info.widths[idx] < device.name_len() {
-                    let size_incr = device.name_len() - col_info.widths[idx];
+                let device_name_len = device.name_len();
+                if col_info.widths[idx] < device_name_len {
+                    let size_incr = device_name_len - col_info.widths[idx];
                     col_info.widths[idx] += size_incr;
                     col_info.total_w += u16::from(size_incr);
                 }
@@ -466,7 +540,10 @@ impl DeviceList {
         }
         
         // Find highest amount of columns with valid display width
-        let mut col_info = &ColsInfo { widths: vec![self.max_name_len], total_w: max_w };
+        let mut col_info = &ColsInfo { 
+            widths: vec![self.max_name_len], 
+            total_w: max_w 
+        };
         for candidate in col_infos.iter().rev() {
             if candidate.total_w <= max_w {
                 col_info = candidate;
@@ -484,19 +561,20 @@ impl DeviceList {
             }
             let idx = idx % col_info.widths.len();
             device.update_info();
-            let printed_str = 
-                self.correctly_quoted_device_name(&device);
-            let padding = " ".repeat((col_info.widths[idx] + extra_char_num - device.name_len() - 2).into());
-            let _ = write!(stdout, "{printed_str}{padding}");
+            let printed_str = self.correctly_quoted_device_name(&device);
+            let padding = " ".repeat(
+                (col_info.widths[idx] - device.name_len())
+                .into());
+            let _ = write!(stdout, "{printed_str}{padding}  ");
         }
         let _ = writeln!(stdout);
     }
 
-    pub fn print_info_colored_all(&self) {
+    pub fn print_info_all(&self) {
         for device in &self.devices {
             let mut device = device.lock().expect("Mutex should not be poisoned.");
             device.update_info();
-            device.print_info_colored();
+            device.print_info();
         }
     }
     
@@ -504,6 +582,17 @@ impl DeviceList {
     _async_all_devices!(unpair_all, unpair);
     _async_all_devices!(connect_all, connect);
     _async_all_devices!(disconnect_all, disconnect);
+
+    // Sets whether quotes will be added if there is a
+    // device name containing whitespace
+    pub fn set_quote_names(&mut self, val: bool) {
+        self.quote_names = val;
+    }
+
+    // Sets whether output will be colored with ANSI color codes
+    pub fn set_print_in_color(&mut self, val: bool) {
+        self.print_in_color = val;
+    }
 }
 
 impl IntoIterator for DeviceList {
