@@ -10,4 +10,5 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.5.4", features = ["cargo"] }
 clap_complete = "4.5.1"
+dbus = "0.9.7"
 regex = "1.10.4"
