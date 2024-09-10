@@ -141,7 +141,6 @@ pub fn build_cli() -> Command {
                 ]),
             Command::new("pair")
                 .visible_alias("p")
-                .alias("add")
                 .before_help("Pair with a bluetooth device")
                 .args([
                     name_arg.clone(), 
@@ -159,8 +158,7 @@ pub fn build_cli() -> Command {
                 ]),
             Command::new("unpair")
                 .visible_alias("up")
-                .aliases(["remove", "rm"])
-                .before_help("Remove a bluetooth device")
+                .before_help("Unpair from a bluetooth device")
                 .args([
                     name_arg.clone(), 
                     partial_arg.clone(),
