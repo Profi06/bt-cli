@@ -13,7 +13,8 @@ fn main() {
     let stdout_is_terminal = stdout().lock().is_terminal();
     devicelist.set_quote_names(stdout_is_terminal); 
     devicelist.set_print_in_color(stdout_is_terminal); 
-    let matches = cli::build_cli().get_matches();
+    let mut command = cli::build_cli();
+    let matches = command.get_matches_mut();
 
     match matches.subcommand() {
         Some(("list", sub_matches)) => {
@@ -71,11 +72,10 @@ fn main() {
                 .unpair_all();
             println!("Unpaired {} devices.", count);
         },
-        None => {
-            devicelist.fill(None);
-            devicelist.print(false, false);
+        // Some(_) should be unreachable but just in case
+        None | Some(_) => {
+            let _ = command.print_help();
         },
-        Some(_) => unreachable!(),
     }
 }
 
