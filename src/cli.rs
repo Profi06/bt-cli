@@ -1,3 +1,4 @@
+// vim: cc=81
 use clap::{command, value_parser, Arg, ArgAction, ArgGroup, Command};
 
 pub fn build_cli() -> Command {

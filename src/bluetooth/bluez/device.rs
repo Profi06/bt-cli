@@ -4,18 +4,6 @@ use dbus as dbus;
 use dbus::arg;
 use dbus::blocking;
 
-pub trait OrgFreedesktopDBusIntrospectable {
-    fn introspect(&self) -> Result<String, dbus::Error>;
-}
-
-impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target=T>> OrgFreedesktopDBusIntrospectable for blocking::Proxy<'a, C> {
-
-    fn introspect(&self) -> Result<String, dbus::Error> {
-        self.method_call("org.freedesktop.DBus.Introspectable", "Introspect", ())
-            .and_then(|r: (String, )| Ok(r.0, ))
-    }
-}
-
 pub trait OrgBluezDevice1 {
     fn disconnect(&self) -> Result<(), dbus::Error>;
     fn connect(&self) -> Result<(), dbus::Error>;
