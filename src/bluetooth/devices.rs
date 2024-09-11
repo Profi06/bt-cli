@@ -1,49 +1,27 @@
 // vim: cc=81
-use crate::term_utils;
+use crate::utils::{self, ansi::*};
 use std::{
-    collections::HashMap,
-    io::{self, stdout, IsTerminal, Write}, 
-    process::{Command, Output, Stdio}, 
-    sync::{Arc, Mutex}, thread,
+    io::{stdout, Write}, process::Command, sync::Weak, sync::{Arc, Mutex}, thread
 };
 use regex::Regex;
 
-const ANSI_RESET: &str = "\x1b[0m";
-const ANSI_BLACK: &str = "\x1b[30m";
-const ANSI_RED: &str = "\x1b[31m";
-const ANSI_GREEN: &str = "\x1b[32m";
-const ANSI_YELLOW: &str = "\x1b[33m";
-const ANSI_BLUE: &str = "\x1b[34m";
-const ANSI_MAGENTA: &str = "\x1b[35m";
-const ANSI_CYAN: &str = "\x1b[36m";
-const ANSI_WHITE: &str = "\x1b[37m";
-const ANSI_DEFAULT: &str = "\x1b[39m";
-const ANSI_BLACK_BG: &str = "\x1b[40m";
-const ANSI_RED_BG: &str = "\x1b[41m";
-const ANSI_GREEN_BG: &str = "\x1b[42m";
-const ANSI_YELLOW_BG: &str = "\x1b[43m";
-const ANSI_BLUE_BG: &str = "\x1b[44m";
-const ANSI_MAGENTA_BG: &str = "\x1b[45m";
-const ANSI_CYAN_BG: &str = "\x1b[46m";
-const ANSI_WHITE_BG: &str = "\x1b[47m";
-const ANSI_DEFAULT_BG: &str = "\x1b[49m";
+use super::BluetoothManager;
 
-#[derive(Debug, Clone)]
-pub struct Device {
-    // Name and address are the only
-    // fields that should always be known
-    name: String, 
-    address: String,
+pub struct Device<M: BluetoothManager> {
+    pub address: String,
+    pub name: String,
+    pub bluetooth_manager: Weak<M>,
 
-    alias: Option<String>,
-    paired: Option<bool>,
-    bonded: Option<bool>,
-    trusted: Option<bool>,
-    blocked: Option<bool>,
-    connected: Option<bool>,
+    pub paired: bool,
+    pub bonded: bool,
+    pub trusted: bool,
+    pub blocked: bool,
+    pub connected: bool,
 
-    battery: Option<u8>,
-    icon: Option<String>,
+    /// Unlike name this cannot be renamed locally
+    pub remote_name: Option<String>,
+    pub battery: Option<u8>,
+    pub icon: Option<String>,
 
     // Allow ANSI code color in output from this struct 
     name_in_color: bool,
@@ -52,145 +30,111 @@ pub struct Device {
 // Used for conversion from bluetoothctl to Device
 // during fill_info method
 enum InfoTypeMut<'a> {
+    Boolean(&'a mut bool),
+    String(&'a mut String),
     OptBoolean(&'a mut Option<bool>),
     OptString(&'a mut Option<String>),
     OptBattery(&'a mut Option<u8>),
 }
 
 enum InfoType<'a> {
+    Boolean(&'a bool),
+    String(&'a String),
     OptBoolean(&'a Option<bool>),
     OptString(&'a Option<String>),
     OptBattery(&'a Option<u8>),
 }
 
-impl Device {
-    pub fn new(address: &str, name: &str) -> Device {
+impl<M: BluetoothManager>  Device<M> {
+    pub fn new(
+        address: String,
+        name: String,
+        paired: bool,
+        bonded: bool,
+        trusted: bool,
+        blocked: bool,
+        connected: bool,
+    ) -> Device<M> {
         Device {
-            name: name.to_string(),
-            address: address.to_string(),
-            alias: None,
-            paired: None,
-            bonded: None,
-            trusted: None,
-            blocked: None,
-            connected: None,
+            address,
+            name,
+            bluetooth_manager: Weak::<M>::new(),
+
+            paired,
+            bonded,
+            trusted,
+            blocked,
+            connected,
+
+            remote_name: None,
             battery: None,
             icon: None,
+
             name_in_color: true,
         }
     }
 
-    pub fn update_info(&mut self) -> &mut Device {
-        let cmd = Command::new("bluetoothctl")
-            .args(["info", &self.address])
-            .output().expect("failed to execute bluetoothctl info");
-        // Early return if device info was not successful
-        if !cmd.status.success() {
-            return self;
-        }
-        let mut value_hashmap = HashMap::from([
-            ("Alias: ", InfoTypeMut::OptString(&mut self.alias)),
-            ("Paired: ", InfoTypeMut::OptBoolean(&mut self.paired)),
-            ("Bonded: ", InfoTypeMut::OptBoolean(&mut self.bonded)),
-            ("Trusted: ", InfoTypeMut::OptBoolean(&mut self.trusted)),
-            ("Blocked: ", InfoTypeMut::OptBoolean(&mut self.blocked)),
-            ("Connected: ", InfoTypeMut::OptBoolean(&mut self.connected)),
-            ("Battery Percentage: ", InfoTypeMut::OptBattery(&mut self.battery)),
-            ("Icon: ", InfoTypeMut::OptString(&mut self.icon)),
-        ]);
-        let out = String::from_utf8(cmd.stdout).unwrap_or("".to_string());
-        for line in out.lines() {
-            let line = line.trim_start();
-            for (text, infotype) in &mut value_hashmap {
-                // Check that Line starts with specified text
-                if !line.starts_with(text) {
-                    continue;
-                }
-                // Set property
-                match infotype {
-                    InfoTypeMut::OptBoolean(property) => 
-                    **property = Some(line.contains("yes")),
-
-                    InfoTypeMut::OptString(property) => 
-                    **property = Some(line
-                        .strip_prefix(text).expect("Prefix should exist")
-                        .to_string()
-                    ),
-
-                    InfoTypeMut::OptBattery(property) => 
-                    **property = line
-                        // Split at left and right braces 
-                        // (only included in input right before and
-                        // after human readable battery percentage)
-                        .split(&['(', ')'][..])
-                        .nth(1).and_then(|val| 
-                            val.parse().ok()
-                        ),
-                }
-            }
-        }
-        self
-    }
-
     /// Attempts to pair with device
     pub fn pair(&mut self) -> bool {
-        println!("Attempting to pair with {}...", self.get_name());
+        println!("Attempting to pair with {}...", self.get_name_colored());
         pairable(true);
-        let ret = cli_cmd(vec!["pair", &self.address], |out, err| 
-            out.contains("Pairing successful") 
-                || err.contains("org.bluez.Error.AlreadyExists")
-        );
+        let success = self.bluetooth_manager.upgrade().is_some_and(|bt_man| {
+            bt_man.pair_device(&self.address)
+            });
         pairable(false);
-        if ret {
-            self.paired = Some(true);
-            println!("{} paired.", self.get_name());
+        if success {
+            self.paired = true;
+            println!("{} paired.", self.get_name_colored());
         } else {
-            println!("Could not pair {}.", self.get_name());
+            println!("Could not pair {}.", self.get_name_colored());
         }
-        ret
+        success
     }
 
-    /// Unpairs the device
+    /// Unpairs the device. Only fails if bluetooth_manager is invalid.
     pub fn unpair(&mut self) -> bool {
-        println!("Attempting to remove {}...", self.get_name());
-        let success = cli_cmd(vec!["remove", &self.address], |out, _| 
-            out.contains("Device has been removed"));
+        let success = self.bluetooth_manager.upgrade().is_some_and(|bt_man| {
+            bt_man.unpair_device(&self.address);
+            true
+            });
         if success {
-            self.paired = Some(false);
-            self.connected = Some(false);
-            println!("{} unpaired.", self.get_name());
+            self.paired = false;
+            self.connected = false;
+            println!("{} unpaired.", self.get_name_colored());
         } else {
-            println!("Could not unpair {}.", self.get_name());
+            println!("Could not unpair {}.", self.get_name_colored());
         }
         success
     }
 
     /// Attempts to connect to device
     pub fn connect(&mut self) -> bool {
-        println!("Attempting to connect with {}...", self.get_name());
-        let success = cli_cmd(vec!["connect", &self.address], |out, _|
-            out.contains("Connection successful")
-        );
+        println!("Attempting to connect with {}...", self.get_name_colored());
+        let success = self.bluetooth_manager.upgrade().is_some_and(|bt_man| {
+            bt_man.connect_device(&self.address)
+            });
         if success {
-            self.connected = Some(true);
-            println!("{} connected.", self.get_name());
+            self.connected = true;
+            println!("{} connected.", self.get_name_colored());
         } else {
-            println!("Could not connect {}.", self.get_name());
+            println!("Could not connect {}.", self.get_name_colored());
         }
         success
     }
 
-    /// Attempts to disconnect from device
+
+    /// Disconnects the device. Only fails if bluetooth_manager is invalid.
     pub fn disconnect(&mut self) -> bool {
-        println!("Attempting to disconnect from {}...", self.get_name());
-        let success = cli_cmd(vec!["disconnect", &self.address], |out, _|
-            out.contains(&("[CHG] Device ".to_owned() + &self.address + " Connected: no"))
-        );
+        let success = self.bluetooth_manager.upgrade().is_some_and(|bt_man| {
+            bt_man.disconnect_device(&self.address);
+            true
+            });
         if success {
-            self.connected = Some(false);
-            println!("{} disconnected.", self.get_name());
+            self.paired = false;
+            self.connected = false;
+            println!("{} disconnected.", self.get_name_colored());
         } else {
-            println!("Could not disconnect {}.", self.get_name());
+            println!("Could not disconnect {}.", self.get_name_colored());
         }
         success
     }
@@ -199,9 +143,9 @@ impl Device {
     pub fn ansi_color_codes(&self) -> &str {
         if !self.name_in_color {
             "" 
-        } else if self.paired != Some(true) {
+        } else if self.paired != true {
             "\x1b[2;37m" // dim, white
-        } else if self.connected == Some(true) {
+        } else if self.connected == true {
             "\x1b[1;34m" // Bold, blue
         } else {
             "\x1b[22;39m" // Normal, default
@@ -214,7 +158,7 @@ impl Device {
     }
 
     /// Returns name. Includes ANSI color codes if name_in_color is true.
-    pub fn get_name(&self) -> String {
+    pub fn get_name_colored(&self) -> String {
         format!("{}{}{}", 
             self.ansi_color_codes(), 
             self.name,
@@ -238,16 +182,16 @@ impl Device {
     /// Will print detailed information about the device.
     pub fn print_info(&self) {
         let mut print_str = format!("{} {}", 
-            self.address, self.get_name());
+            self.address, self.get_name_colored());
         let print_props = Vec::from([
-            ("\n\tAlias: ", InfoType::OptString(&self.alias)),
-            ("\n\tIcon: ", InfoType::OptString(&self.icon)),
-            ("\n\tConnected: ", InfoType::OptBoolean(&self.connected)),
-            ("\n\tPaired: ", InfoType::OptBoolean(&self.paired)),
-            ("\n\tBonded: ", InfoType::OptBoolean(&self.bonded)),
-            ("\n\tTrusted: ", InfoType::OptBoolean(&self.trusted)),
-            ("\n\tBlocked: ", InfoType::OptBoolean(&self.blocked)),
+            ("\n\tPaired: ", InfoType::Boolean(&self.paired)),
+            ("\n\tBonded: ", InfoType::Boolean(&self.bonded)),
+            ("\n\tTrusted: ", InfoType::Boolean(&self.trusted)),
+            ("\n\tBlocked: ", InfoType::Boolean(&self.blocked)),
+            ("\n\tConnected: ", InfoType::Boolean(&self.connected)),
+            ("\n\tRemote Name: ", InfoType::OptString(&self.remote_name)),
             ("\n\tBattery Percentage: ", InfoType::OptBattery(&self.battery)),
+            ("\n\tIcon: ", InfoType::OptString(&self.icon)),
         ]);
         let (ansi_red, ansi_yellow, ansi_green) = if self.name_in_color { 
             (ANSI_RED, ANSI_YELLOW, ANSI_GREEN)
@@ -257,8 +201,10 @@ impl Device {
         let ansi_reset = self.ansi_color_reset();
         for (prefix, property) in print_props {
             print_str = print_str + &match property {
+                InfoType::String(propval) |
                 InfoType::OptString(Some(propval)) => 
                     format!("{prefix}{propval}"),
+                InfoType::Boolean(propval) | 
                 InfoType::OptBoolean(Some(propval)) => 
                     format!("{prefix}{}{}{ansi_reset}", 
                         if *propval { ansi_green } else { ansi_red },
@@ -288,38 +234,31 @@ impl Device {
     pub fn set_name_in_color(&mut self, val: bool) {
         self.name_in_color = val;
     }
+
 }
 
-/// Macro for DeviceList, used to asyncronously call a method on all devices in the list
-/// and return the sum of the return values of the successful method calls (usuallly
-/// evaluating to the amount of devices paired or similar)
+/// Macro for DeviceList, used to asyncronously call a method on all devices in 
+/// the list and return the sum of the return values of the successful method 
+/// calls (usuallly evaluating to the amount of devices paired or similar)
 macro_rules! _async_all_devices {
     ($func:ident, $x:ident) => { 
         pub fn $func(&self) -> i32 {
-            let mut threads = Vec::new();
-            for device in &self.devices {
-                let device = Arc::clone(&device);
-                threads.push(thread::spawn(move || {
-                    let mut device = device.lock().expect("Mutex should not be poisoned.");
-                    i32::from(device.$x())
-                }));
-            }
             let mut ret_count: i32 = 0;
-            for join_handle in threads {
-                if let Ok(thread_ret) = join_handle.join() {
-                    ret_count += thread_ret;
-                }
+            for device in &self.devices {
+                let mut device = device.lock()
+                    .expect("Mutex should not be poisoned.");
+                ret_count += i32::from(device.$x());
             }
             ret_count
         }
     };
 }
 
-type Devices = Vec<Arc<Mutex<Device>>>;
+pub type Devices<M: BluetoothManager> = Vec<Arc<Mutex<Device<M>>>>;
 
-#[derive(Debug)]
-pub struct DeviceList {
-    devices: Devices,
+pub struct DeviceList<M: BluetoothManager> {
+    devices: Devices<M>,
+    bluetooth_manager: Arc<M>,
 
     // Following properties are saved for output
     quote_names: bool,
@@ -335,11 +274,12 @@ pub enum FilterBehaviour {
     ContainsRegex,
 }
 
-impl DeviceList {
+impl<M: BluetoothManager> DeviceList<M> {
     /// Create a new empty device list
-    pub fn new() -> DeviceList {
+    pub fn new(bluetooth_manager: Arc<M>) -> DeviceList<M> {
         DeviceList { 
             devices: Vec::new(), 
+            bluetooth_manager,
             quote_names: false, 
             print_in_color: true,
             max_name_len: 0, 
@@ -347,9 +287,31 @@ impl DeviceList {
         }
     }
 
+    /// Adds a device to this DeviceList
+    pub fn add_device(&mut self, new: Arc<Mutex<Device<M>>>) {
+        let mut device = new.lock().expect("Mutex should not be poisoned.");
+        self.quote_names |= device.name.contains(char::is_whitespace);
+        device.name_in_color = self.print_in_color;
+        self.max_name_len = self.max_name_len.max(device.name_len());
+        self.min_name_len = self.max_name_len.min(device.name_len());
+        drop(device);
+        self.devices.push(new);
+    }
+
     /// Fills the device list with devices, optionally scanning for unpaired
     /// devices for scan_secs seconds.
-    pub fn fill(&mut self, scan_secs : Option<u32>) -> &mut DeviceList {
+    pub fn fill(&mut self) -> &mut DeviceList<M> {
+        self.devices = self.bluetooth_manager.get_all_devices();
+        self.quote_names |= self.devices.iter().any(|device| {
+            device.lock().expect("Mutex should not be poisoned.")
+                .name.contains(char::is_whitespace)
+            });
+        self
+    }
+/*
+    /// Fills the device list with devices, optionally scanning for unpaired
+    /// devices for scan_secs seconds.
+    pub fn fill(&mut self, scan_secs : Option<u32>) -> &mut DeviceList<M> {
         let mut devices_args = vec!["devices"];
 
         if let Some(scan_secs) = scan_secs {
@@ -385,22 +347,19 @@ impl DeviceList {
                 continue;
             }
             if let (Some(address), Some(name)) = (split.next(), split.next()) {
-                self.quote_names |= name.contains(char::is_whitespace);
                 let mut device = Device::new(address, name);
-                device.name_in_color = self.print_in_color;
-                self.max_name_len = self.max_name_len.max(device.name_len());
-                self.min_name_len = self.max_name_len.min(device.name_len());
                 self.devices.push(Arc::new(Mutex::new(device)));
             }
         }
         self.quote_names &= stdout().lock().is_terminal();
         self
     }
+*/
 
     /// Returns a filtered device list
-    pub fn filtered<F>(&self, filter: F) -> DeviceList 
-        where F: Fn(&Device) -> bool {
-        let mut retval = DeviceList::new();
+    pub fn filtered<F>(&self, filter: F) -> DeviceList<M> 
+        where F: Fn(&Device<M>) -> bool {
+        let mut retval = DeviceList::new(Arc::clone(&self.bluetooth_manager));
         for device_ref in &self.devices {
             let mut matches = false;
             if let Ok(device) = device_ref.lock() {
@@ -415,7 +374,7 @@ impl DeviceList {
 
     /// Returns devices in device list with name matching the filterstr, with 
     /// "matching" defined according to behaviour.
-    pub fn filtered_name(&self, filterstr : &str, behaviour: FilterBehaviour) -> DeviceList {
+    pub fn filtered_name(&self, filterstr : &str, behaviour: FilterBehaviour) -> DeviceList<M> {
         match behaviour {
             FilterBehaviour::Full => self.filtered_name_full(filterstr),
             FilterBehaviour::Contains => self.filtered_name_contains(filterstr),
@@ -424,37 +383,37 @@ impl DeviceList {
         }
     }
     /// Returns devices in device list with given name
-    pub fn filtered_name_full(&self, name : &str) -> DeviceList {
+    pub fn filtered_name_full(&self, name : &str) -> DeviceList<M> {
         self.filtered(|device| device.name == name)
     }
 
     /// Returns devices in device list with name containing substr
-    pub fn filtered_name_contains(&self, substr : &str) -> DeviceList {
+    pub fn filtered_name_contains(&self, substr : &str) -> DeviceList<M> {
         self.filtered(|device| device.name.contains(substr))
     }
 
     /// Returns devices in device list with name matching regex.
-    pub fn filtered_name_full_regex(&self, regex: &str) -> DeviceList {
+    pub fn filtered_name_full_regex(&self, regex: &str) -> DeviceList<M> {
         match Regex::new(regex) {
             Ok(re) => self.filtered(|device| re.is_match(&device.name)),
-            Err(_) => DeviceList::new(),
+            Err(_) => DeviceList::new(Arc::clone(&self.bluetooth_manager)),
         }
     }
 
     /// Returns devices in device list with name containing a match for the regex.
-    pub fn filtered_name_contains_regex(&self, regex: &str) -> DeviceList {
+    pub fn filtered_name_contains_regex(&self, regex: &str) -> DeviceList<M> {
         match Regex::new(regex) {
             Ok(re) => self.filtered(|device| re.find(&device.name).is_some()),
-            Err(_) => DeviceList::new(),
+            Err(_) => DeviceList::new(Arc::clone(&self.bluetooth_manager)),
         }
     }
 
     /// Returns the name of the device with decorations depending on state of self
-    pub fn correctly_quoted_device_name(&self, device: &Device) -> String {
+    pub fn correctly_quoted_device_name(&self, device: &Device<M>) -> String {
         if self.quote_names {
             device.quoted_name("'", " ")
         } else {
-            device.get_name()
+            device.get_name_colored()
         }
     }
 
@@ -472,8 +431,8 @@ impl DeviceList {
     pub fn print_fullline(&mut self) {
         let mut stdout = stdout().lock();
         for device in &self.devices {
-            let mut device = device.lock().expect("Mutex should not be poisoned.");
-            device.update_info();
+            let device = device.lock()
+                .expect("Mutex should not be poisoned.");
             let _ = writeln!(stdout, "{}",
                 self.correctly_quoted_device_name(&device));
         }
@@ -483,8 +442,8 @@ impl DeviceList {
     pub fn print_long(&mut self) {
         let mut stdout = stdout().lock();
         for device in &self.devices {
-            let mut device = device.lock().expect("Mutex should not be poisoned.");
-            device.update_info();
+            let device = device.lock()
+                .expect("Mutex should not be poisoned.");
             let _ = writeln!(stdout, "{} {}", &device.address, 
                 self.correctly_quoted_device_name(&device));
         }
@@ -496,7 +455,7 @@ impl DeviceList {
         // widths
         #[derive(Debug)]
         struct ColsInfo { widths: Vec<u8>, total_w: u16 }
-        let max_w: u16 = match term_utils::get_termsize() {
+        let max_w: u16 = match utils::get_termsize() {
             Some(size) => size.cols,
             _ => 80,
         }.try_into().unwrap_or(80);
@@ -560,18 +519,16 @@ impl DeviceList {
         // Finally, print
         let mut stdout = stdout().lock();
         for (idx, device) in self.devices.iter().enumerate() {
-            let mut device = device.lock().expect("Mutex should not be poisoned.");
+            let device = device.lock().expect("Mutex should not be poisoned.");
             // Output newline when idx 0 is reached (except for first line, 
             // where newline is assumed to already be present)
             if idx != 0 && idx % col_info.widths.len() == 0 {
                 let _ = writeln!(stdout, "");
             }
             let idx = idx % col_info.widths.len();
-            device.update_info();
             let printed_str = self.correctly_quoted_device_name(&device);
             let padding = " ".repeat(
-                (col_info.widths[idx] - device.name_len())
-                .into());
+                (col_info.widths[idx] - device.name_len()).into());
             let _ = write!(stdout, "{printed_str}{padding}  ");
         }
         let _ = writeln!(stdout);
@@ -580,8 +537,8 @@ impl DeviceList {
     /// Calls print_info on all devices
     pub fn print_info_all(&self) {
         for device in &self.devices {
-            let mut device = device.lock().expect("Mutex should not be poisoned.");
-            device.update_info();
+            let device = device.lock()
+                .expect("Mutex should not be poisoned.");
             device.print_info();
         }
     }
@@ -603,8 +560,8 @@ impl DeviceList {
     }
 }
 
-impl IntoIterator for DeviceList {
-    type Item = Arc<Mutex<Device>>;
+impl<M: BluetoothManager> IntoIterator for DeviceList<M> {
+    type Item = Arc<Mutex<Device<M>>>;
     type IntoIter = std::vec::IntoIter<Self::Item>;
     fn into_iter(self) -> Self::IntoIter {
         self.devices.into_iter()
