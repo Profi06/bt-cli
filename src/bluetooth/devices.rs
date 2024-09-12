@@ -225,6 +225,11 @@ impl<M: BluetoothManager>  Device<M> {
         self.name_in_color = val;
     }
 
+    /// Sets the bluetooth manager of this device to a Weak downgraded from
+    /// the passed Arc
+    pub fn set_bluetooth_manager(&mut self, bt_man: &Arc<Mutex<M>>) {
+        self.bluetooth_manager = Arc::downgrade(bt_man);
+    }
 }
 
 /// Macro for DeviceList, used to asyncronously call a method on all devices in 
@@ -280,10 +285,14 @@ impl<M: BluetoothManager> DeviceList<M> {
     /// Adds a device to this DeviceList
     pub fn add_device(&mut self, new: Arc<Mutex<Device<M>>>) {
         let mut device = new.lock().expect("Mutex should not be poisoned.");
+        device.set_bluetooth_manager(&self.bluetooth_manager);
+
         self.quote_names |= device.name.contains(char::is_whitespace);
         device.name_in_color = self.print_in_color;
-        self.max_name_len = self.max_name_len.max(device.name_len());
-        self.min_name_len = self.max_name_len.min(device.name_len());
+        let name_len = device.name_len();
+        self.max_name_len = self.max_name_len.max(name_len);
+        self.min_name_len = self.max_name_len.min(name_len);
+        
         drop(device);
         self.devices.push(new);
     }
@@ -291,13 +300,11 @@ impl<M: BluetoothManager> DeviceList<M> {
     /// Fills the device list with devices, optionally scanning for unpaired
     /// devices for scan_secs seconds.
     pub fn fill(&mut self) -> &mut DeviceList<M> {
-        self.devices = self.bluetooth_manager.get_all_devices();
-        for device in &self.devices {
-            let device = device.lock().expect("Mutex should not be poisoned.");
-            self.quote_names |= device.name.contains(char::is_whitespace);
-            let name_len = device.name_len();
-            self.max_name_len = self.max_name_len.max(name_len);
-            self.min_name_len = self.max_name_len.min(name_len);
+        let devices = self.bluetooth_manager
+            .lock().expect("Mutex should not be poisoned.")
+            .get_all_devices();
+        for wrapped_device in devices {
+            self.add_device(wrapped_device)
         }
         self
     }
