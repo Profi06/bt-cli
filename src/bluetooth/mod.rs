@@ -1,10 +1,10 @@
 // vim: cc=81
-pub mod devices;
 pub mod bluez;
+pub mod devices;
 
 use std::time::Duration;
 
-pub use devices::{ DeviceList, Devices };
+pub use devices::{DeviceList, Devices};
 
 pub trait BluetoothManager {
     /// Updates the BluetoothManager lists of devices and adapters
@@ -12,7 +12,9 @@ pub trait BluetoothManager {
     /// instance. To set their bluetooth_manager, add them to a DeviceList.
     fn update(&mut self) -> &mut Self;
     /// Returns all Devices
-    fn get_all_devices(&self) -> Devices<Self> where Self: Sized;
+    fn get_all_devices(&self) -> Devices<Self>
+    where
+        Self: Sized;
     /// Sets whether the host machine is pairable.
     fn set_pairable(&self, pairable: bool);
     /// Scans for pairable devices for a given duration
