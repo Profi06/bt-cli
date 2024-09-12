@@ -1,7 +1,7 @@
 // vim: cc=81
 use crate::utils::{self, ansi::*};
 use std::{
-    io::{stdout, Write}, process::Command, sync::Weak, sync::{Arc, Mutex}, thread
+    io::{stdout, Write}, process::Command, sync::Weak, sync::{Arc, Mutex}
 };
 use regex::Regex;
 
@@ -25,16 +25,6 @@ pub struct Device<M: BluetoothManager> {
 
     // Allow ANSI code color in output from this struct 
     name_in_color: bool,
-}
-
-// Used for conversion from bluetoothctl to Device
-// during fill_info method
-enum InfoTypeMut<'a> {
-    Boolean(&'a mut bool),
-    String(&'a mut String),
-    OptBoolean(&'a mut Option<bool>),
-    OptString(&'a mut Option<String>),
-    OptBattery(&'a mut Option<u8>),
 }
 
 enum InfoType<'a> {
@@ -254,7 +244,7 @@ macro_rules! _async_all_devices {
     };
 }
 
-pub type Devices<M: BluetoothManager> = Vec<Arc<Mutex<Device<M>>>>;
+pub type Devices<M> = Vec<Arc<Mutex<Device<M>>>>;
 
 pub struct DeviceList<M: BluetoothManager> {
     devices: Devices<M>,
@@ -302,10 +292,13 @@ impl<M: BluetoothManager> DeviceList<M> {
     /// devices for scan_secs seconds.
     pub fn fill(&mut self) -> &mut DeviceList<M> {
         self.devices = self.bluetooth_manager.get_all_devices();
-        self.quote_names |= self.devices.iter().any(|device| {
-            device.lock().expect("Mutex should not be poisoned.")
-                .name.contains(char::is_whitespace)
-            });
+        for device in &self.devices {
+            let device = device.lock().expect("Mutex should not be poisoned.");
+            self.quote_names |= device.name.contains(char::is_whitespace);
+            let name_len = device.name_len();
+            self.max_name_len = self.max_name_len.max(name_len);
+            self.min_name_len = self.max_name_len.min(name_len);
+        }
         self
     }
 /*
