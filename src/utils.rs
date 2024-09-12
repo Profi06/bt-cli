@@ -33,15 +33,16 @@ pub fn get_termsize() -> Option<TermSize> {
     let output = match Command::new("stty")
         .arg("size")
         .stdin(Stdio::inherit())
-        .output() {
-            Ok(out) => String::from_utf8(out.stdout).ok(),
-            Err(_) => None,
+        .output()
+    {
+        Ok(out) => String::from_utf8(out.stdout).ok(),
+        Err(_) => None,
     }?;
     let mut iter = output.split(char::is_whitespace);
     // Parse lines and cols from output
     let lines = iter.next()?.parse().ok()?;
     let cols = iter.next()?.parse().ok()?;
-    Some(TermSize{ lines, cols })
+    Some(TermSize { lines, cols })
 }
 
 pub mod ansi {
