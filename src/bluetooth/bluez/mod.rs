@@ -5,8 +5,8 @@ pub mod adapter;
 
 use super::devices::Device;
 use super::{BluetoothManager, Devices};
-use std::u8;
 use std::{
+    thread,
     collections::HashMap,
     sync::{ Arc, Mutex },
     time::Duration,
@@ -14,7 +14,6 @@ use std::{
 use dbus::arg::prop_cast;
 use dbus::{
     Path,
-    arg::RefArg,
     blocking::{
         Connection, Proxy,
         stdintf::org_freedesktop_dbus::ObjectManager,
@@ -124,8 +123,15 @@ impl BluetoothManager for DBusBluetoothManager {
     }
 
     fn scan(&self, duration: &Duration) {
-        duration;
-        todo!()
+        for a_path in &self.adapter_paths {
+            let proxy = self.connection
+                .with_proxy(BLUEZ_DBUS, a_path, DBUS_TIMEOUT);
+            let discovering = proxy.start_discovery().is_ok();
+            if discovering {
+                thread::sleep(*duration);
+                let _ = proxy.stop_discovery();
+            }
+        }
     }
 
 
