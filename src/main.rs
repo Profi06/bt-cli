@@ -3,33 +3,37 @@ mod bluetooth;
 mod utils;
 mod cli;
 
-use std::{env, io::{stdout, IsTerminal}, sync::Arc};
+use std::{env, io::{stdout, IsTerminal}, sync::{Arc, Mutex}, time::Duration};
 use bluetooth::{*, devices::FilterBehaviour};
 use bluez::DBusBluetoothManager;
 use clap::ArgMatches;
 
 fn main() {
-    // Initialize empty device list and set values
+    let mut command = cli::build_cli();
+    let matches = command.get_matches_mut();
+    let stdout_is_terminal = stdout().lock().is_terminal();
     if let Ok(mut bluetooth_manager) = DBusBluetoothManager::new() {
+        bluetooth_manager.set_scan_display_hint(stdout_is_terminal);
         bluetooth_manager.update();
-        let bluetooth_manager = Arc::new(bluetooth_manager);
-        let mut devicelist = DeviceList::new(Arc::clone(&bluetooth_manager));
+        let bluetooth_manager = Arc::new(Mutex::new(bluetooth_manager));
 
-        let stdout_is_terminal = stdout().lock().is_terminal();
+        // Initialize empty device list and set values
+        let mut devicelist = DeviceList::new(Arc::clone(&bluetooth_manager));
         devicelist.set_quote_names(stdout_is_terminal); 
         devicelist.set_print_in_color(stdout_is_terminal); 
-        let mut command = cli::build_cli();
-        let matches = command.get_matches_mut();
 
         match matches.subcommand() {
             Some(("list", sub_matches)) => {
                 let long_output = sub_matches.get_flag("long_output");
                 let linewise = sub_matches.get_flag("linewise");
-                let all = sub_matches.get_flag("all");
-                // TODO: Use if all == true
-                let timeout = get_timeout(
-                    &sub_matches.get_one("timeout").copied(), 30);
-
+                if sub_matches.get_flag("all") {
+                    let timeout = get_timeout(
+                        &sub_matches.get_one("timeout").copied(), 30);
+                    bluetooth_manager
+                        .lock().expect("Mutex should not be poisoned.")
+                        .scan_mut(&Duration::from_secs(timeout))
+                        .update();
+                }
                 devicelist.fill();
                 devicelist.print(linewise, long_output);
             }
@@ -64,6 +68,10 @@ fn main() {
                     .expect("filter is required");
                 let timeout = get_timeout(
                     &sub_matches.get_one("timeout").copied(), 5);
+                bluetooth_manager
+                    .lock().expect("Mutex should not be poisoned.")
+                    .scan_mut(&Duration::from_secs(timeout))
+                    .update();
                 let count = devicelist
                     .fill()
                     .filtered_name(filter, get_behaviour(sub_matches))
@@ -87,10 +95,10 @@ fn main() {
     }
 }
 
-fn get_timeout(param: &Option<u32>, default: u32) -> Option<u32> {
-    param.or_else(|| {match env::var("BT_TIMEOUT") {
-        Ok(var) => var.trim().parse().ok().or(Some(default)),
-        Err(_) => Some(default),
+fn get_timeout(param: &Option<u64>, default: u64) -> u64 {
+    param.unwrap_or_else(|| { match env::var("BT_TIMEOUT") {
+        Ok(var) => var.trim().parse().ok().unwrap_or(default),
+        Err(_) => default,
     }})
 }
 
