@@ -340,53 +340,6 @@ impl<M: BluetoothManager> DeviceList<M> {
         }
         self
     }
-    /*
-        /// Fills the device list with devices, optionally scanning for unpaired
-        /// devices for scan_secs seconds.
-        pub fn fill(&mut self, scan_secs : Option<u32>) -> &mut DeviceList<M> {
-            let mut devices_args = vec!["devices"];
-
-            if let Some(scan_secs) = scan_secs {
-                let do_print = io::stdout().is_terminal() && self.print_in_color;
-                if do_print {
-                    print!("\x1b[2;37mScanning for devices...{ANSI_RESET}");
-                    let _ = stdout().flush();
-                }
-                // bluetoothctl scan for unpaired nearby devices
-                let _ = Command::new("bluetoothctl")
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .args(["--timeout", &scan_secs.to_string(), "scan", "on"])
-                    .status();
-                if do_print {
-                    print!("\x1b[1K\r");
-                }
-            } else {
-                devices_args.push("Paired");
-            }
-            let bluetoothctl_output : Output = Command::new("bluetoothctl")
-                .args(devices_args)
-                .output()
-                .expect("failed to execute bluetoothctl devices");
-
-            let output_str = String::from_utf8(bluetoothctl_output.stdout)
-                .unwrap_or(String::new());
-            for line in output_str.lines() {
-                let mut split = line.splitn(3, ' ');
-                // First should always be "Device" and line is therefore invalid if
-                // not (for example by delayed device change notifications from scan)
-                if split.next() != Some("Device") {
-                    continue;
-                }
-                if let (Some(address), Some(name)) = (split.next(), split.next()) {
-                    let mut device = Device::new(address, name);
-                    self.devices.push(Arc::new(Mutex::new(device)));
-                }
-            }
-            self.quote_names &= stdout().lock().is_terminal();
-            self
-        }
-    */
 
     /// Returns a filtered device list
     pub fn filtered<F>(&self, filter: F) -> DeviceList<M>
