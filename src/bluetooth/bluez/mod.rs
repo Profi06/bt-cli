@@ -1,6 +1,6 @@
 // vim: cc=81
 pub mod adapter;
-pub mod agent_manager;
+// pub mod agent_manager;
 pub mod device;
 
 use super::devices::Device;

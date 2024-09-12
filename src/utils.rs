@@ -47,22 +47,22 @@ pub fn get_termsize() -> Option<TermSize> {
 
 pub mod ansi {
     pub const ANSI_RESET: &str = "\x1b[0m";
-    pub const ANSI_BLACK: &str = "\x1b[30m";
+    // pub const ANSI_BLACK: &str = "\x1b[30m";
     pub const ANSI_RED: &str = "\x1b[31m";
     pub const ANSI_GREEN: &str = "\x1b[32m";
     pub const ANSI_YELLOW: &str = "\x1b[33m";
-    pub const ANSI_BLUE: &str = "\x1b[34m";
-    pub const ANSI_MAGENTA: &str = "\x1b[35m";
-    pub const ANSI_CYAN: &str = "\x1b[36m";
-    pub const ANSI_WHITE: &str = "\x1b[37m";
-    pub const ANSI_DEFAULT: &str = "\x1b[39m";
-    pub const ANSI_BLACK_BG: &str = "\x1b[40m";
-    pub const ANSI_RED_BG: &str = "\x1b[41m";
-    pub const ANSI_GREEN_BG: &str = "\x1b[42m";
-    pub const ANSI_YELLOW_BG: &str = "\x1b[43m";
-    pub const ANSI_BLUE_BG: &str = "\x1b[44m";
-    pub const ANSI_MAGENTA_BG: &str = "\x1b[45m";
-    pub const ANSI_CYAN_BG: &str = "\x1b[46m";
-    pub const ANSI_WHITE_BG: &str = "\x1b[47m";
-    pub const ANSI_DEFAULT_BG: &str = "\x1b[49m";
+    // pub const ANSI_BLUE: &str = "\x1b[34m";
+    // pub const ANSI_MAGENTA: &str = "\x1b[35m";
+    // pub const ANSI_CYAN: &str = "\x1b[36m";
+    // pub const ANSI_WHITE: &str = "\x1b[37m";
+    // pub const ANSI_DEFAULT: &str = "\x1b[39m";
+    // pub const ANSI_BLACK_BG: &str = "\x1b[40m";
+    // pub const ANSI_RED_BG: &str = "\x1b[41m";
+    // pub const ANSI_GREEN_BG: &str = "\x1b[42m";
+    // pub const ANSI_YELLOW_BG: &str = "\x1b[43m";
+    // pub const ANSI_BLUE_BG: &str = "\x1b[44m";
+    // pub const ANSI_MAGENTA_BG: &str = "\x1b[45m";
+    // pub const ANSI_CYAN_BG: &str = "\x1b[46m";
+    // pub const ANSI_WHITE_BG: &str = "\x1b[47m";
+    // pub const ANSI_DEFAULT_BG: &str = "\x1b[49m";
 }

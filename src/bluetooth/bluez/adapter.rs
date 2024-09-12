@@ -4,49 +4,36 @@ use dbus;
 use dbus::arg;
 use dbus::blocking;
 
-pub trait OrgFreedesktopDBusIntrospectable {
-    fn introspect(&self) -> Result<String, dbus::Error>;
-}
-
-impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>>
-    OrgFreedesktopDBusIntrospectable for blocking::Proxy<'a, C>
-{
-    fn introspect(&self) -> Result<String, dbus::Error> {
-        self.method_call("org.freedesktop.DBus.Introspectable", "Introspect", ())
-            .and_then(|r: (String,)| Ok(r.0))
-    }
-}
-
 pub trait OrgBluezAdapter1 {
     fn start_discovery(&self) -> Result<(), dbus::Error>;
-    fn set_discovery_filter(&self, properties: arg::PropMap) -> Result<(), dbus::Error>;
+    // fn set_discovery_filter(&self, properties: arg::PropMap) -> Result<(), dbus::Error>;
     fn stop_discovery(&self) -> Result<(), dbus::Error>;
     fn remove_device(&self, device: dbus::Path) -> Result<(), dbus::Error>;
-    fn get_discovery_filters(&self) -> Result<Vec<String>, dbus::Error>;
-    fn address(&self) -> Result<String, dbus::Error>;
-    fn address_type(&self) -> Result<String, dbus::Error>;
-    fn name(&self) -> Result<String, dbus::Error>;
-    fn alias(&self) -> Result<String, dbus::Error>;
-    fn set_alias(&self, value: String) -> Result<(), dbus::Error>;
-    fn class(&self) -> Result<u32, dbus::Error>;
-    fn powered(&self) -> Result<bool, dbus::Error>;
-    fn set_powered(&self, value: bool) -> Result<(), dbus::Error>;
-    fn power_state(&self) -> Result<String, dbus::Error>;
-    fn discoverable(&self) -> Result<bool, dbus::Error>;
-    fn set_discoverable(&self, value: bool) -> Result<(), dbus::Error>;
-    fn discoverable_timeout(&self) -> Result<u32, dbus::Error>;
-    fn set_discoverable_timeout(&self, value: u32) -> Result<(), dbus::Error>;
-    fn pairable(&self) -> Result<bool, dbus::Error>;
-    fn set_pairable(&self, value: bool) -> Result<(), dbus::Error>;
-    fn pairable_timeout(&self) -> Result<u32, dbus::Error>;
-    fn set_pairable_timeout(&self, value: u32) -> Result<(), dbus::Error>;
-    fn discovering(&self) -> Result<bool, dbus::Error>;
-    fn uuids(&self) -> Result<Vec<String>, dbus::Error>;
-    fn modalias(&self) -> Result<String, dbus::Error>;
-    fn roles(&self) -> Result<Vec<String>, dbus::Error>;
-    fn experimental_features(&self) -> Result<Vec<String>, dbus::Error>;
-    fn manufacturer(&self) -> Result<u16, dbus::Error>;
-    fn version(&self) -> Result<u8, dbus::Error>;
+    // fn get_discovery_filters(&self) -> Result<Vec<String>, dbus::Error>;
+    // fn address(&self) -> Result<String, dbus::Error>;
+    // fn address_type(&self) -> Result<String, dbus::Error>;
+    // fn name(&self) -> Result<String, dbus::Error>;
+    // fn alias(&self) -> Result<String, dbus::Error>;
+    // fn set_alias(&self, value: String) -> Result<(), dbus::Error>;
+    // fn class(&self) -> Result<u32, dbus::Error>;
+    // fn powered(&self) -> Result<bool, dbus::Error>;
+    // fn set_powered(&self, value: bool) -> Result<(), dbus::Error>;
+    // fn power_state(&self) -> Result<String, dbus::Error>;
+    // fn discoverable(&self) -> Result<bool, dbus::Error>;
+    // fn set_discoverable(&self, value: bool) -> Result<(), dbus::Error>;
+    // fn discoverable_timeout(&self) -> Result<u32, dbus::Error>;
+    // fn set_discoverable_timeout(&self, value: u32) -> Result<(), dbus::Error>;
+    // fn pairable(&self) -> Result<bool, dbus::Error>;
+    // fn set_pairable(&self, value: bool) -> Result<(), dbus::Error>;
+    // fn pairable_timeout(&self) -> Result<u32, dbus::Error>;
+    // fn set_pairable_timeout(&self, value: u32) -> Result<(), dbus::Error>;
+    // fn discovering(&self) -> Result<bool, dbus::Error>;
+    // fn uuids(&self) -> Result<Vec<String>, dbus::Error>;
+    // fn modalias(&self) -> Result<String, dbus::Error>;
+    // fn roles(&self) -> Result<Vec<String>, dbus::Error>;
+    // fn experimental_features(&self) -> Result<Vec<String>, dbus::Error>;
+    // fn manufacturer(&self) -> Result<u16, dbus::Error>;
+    // fn version(&self) -> Result<u8, dbus::Error>;
 }
 
 impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluezAdapter1
@@ -55,11 +42,11 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
     fn start_discovery(&self) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Adapter1", "StartDiscovery", ())
     }
-
+/*
     fn set_discovery_filter(&self, properties: arg::PropMap) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Adapter1", "SetDiscoveryFilter", (properties,))
     }
-
+*/
     fn stop_discovery(&self) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Adapter1", "StopDiscovery", ())
     }
@@ -67,7 +54,7 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
     fn remove_device(&self, device: dbus::Path) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Adapter1", "RemoveDevice", (device,))
     }
-
+/*
     fn get_discovery_filters(&self) -> Result<Vec<String>, dbus::Error> {
         self.method_call("org.bluez.Adapter1", "GetDiscoveryFilters", ())
             .and_then(|r: (Vec<String>,)| Ok(r.0))
@@ -269,321 +256,5 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
             "PairableTimeout",
             value,
         )
-    }
-}
-
-pub trait OrgFreedesktopDBusProperties {
-    fn get<R0: for<'b> arg::Get<'b> + 'static>(
-        &self,
-        interface: &str,
-        name: &str,
-    ) -> Result<R0, dbus::Error>;
-    fn set<I2: arg::Arg + arg::Append>(
-        &self,
-        interface: &str,
-        name: &str,
-        value: I2,
-    ) -> Result<(), dbus::Error>;
-    fn get_all(&self, interface: &str) -> Result<arg::PropMap, dbus::Error>;
-}
-
-#[derive(Debug)]
-pub struct OrgFreedesktopDBusPropertiesPropertiesChanged {
-    pub interface: String,
-    pub changed_properties: arg::PropMap,
-    pub invalidated_properties: Vec<String>,
-}
-
-impl arg::AppendAll for OrgFreedesktopDBusPropertiesPropertiesChanged {
-    fn append(&self, i: &mut arg::IterAppend) {
-        arg::RefArg::append(&self.interface, i);
-        arg::RefArg::append(&self.changed_properties, i);
-        arg::RefArg::append(&self.invalidated_properties, i);
-    }
-}
-
-impl arg::ReadAll for OrgFreedesktopDBusPropertiesPropertiesChanged {
-    fn read(i: &mut arg::Iter) -> Result<Self, arg::TypeMismatchError> {
-        Ok(OrgFreedesktopDBusPropertiesPropertiesChanged {
-            interface: i.read()?,
-            changed_properties: i.read()?,
-            invalidated_properties: i.read()?,
-        })
-    }
-}
-
-impl dbus::message::SignalArgs for OrgFreedesktopDBusPropertiesPropertiesChanged {
-    const NAME: &'static str = "PropertiesChanged";
-    const INTERFACE: &'static str = "org.freedesktop.DBus.Properties";
-}
-
-impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgFreedesktopDBusProperties
-    for blocking::Proxy<'a, C>
-{
-    fn get<R0: for<'b> arg::Get<'b> + 'static>(
-        &self,
-        interface: &str,
-        name: &str,
-    ) -> Result<R0, dbus::Error> {
-        self.method_call("org.freedesktop.DBus.Properties", "Get", (interface, name))
-            .and_then(|r: (arg::Variant<R0>,)| Ok((r.0).0))
-    }
-
-    fn set<I2: arg::Arg + arg::Append>(
-        &self,
-        interface: &str,
-        name: &str,
-        value: I2,
-    ) -> Result<(), dbus::Error> {
-        self.method_call(
-            "org.freedesktop.DBus.Properties",
-            "Set",
-            (interface, name, arg::Variant(value)),
-        )
-    }
-
-    fn get_all(&self, interface: &str) -> Result<arg::PropMap, dbus::Error> {
-        self.method_call("org.freedesktop.DBus.Properties", "GetAll", (interface,))
-            .and_then(|r: (arg::PropMap,)| Ok(r.0))
-    }
-}
-
-pub trait OrgBluezBatteryProviderManager1 {
-    fn register_battery_provider(&self, provider: dbus::Path) -> Result<(), dbus::Error>;
-    fn unregister_battery_provider(&self, provider: dbus::Path) -> Result<(), dbus::Error>;
-}
-
-impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>>
-    OrgBluezBatteryProviderManager1 for blocking::Proxy<'a, C>
-{
-    fn register_battery_provider(&self, provider: dbus::Path) -> Result<(), dbus::Error> {
-        self.method_call(
-            "org.bluez.BatteryProviderManager1",
-            "RegisterBatteryProvider",
-            (provider,),
-        )
-    }
-
-    fn unregister_battery_provider(&self, provider: dbus::Path) -> Result<(), dbus::Error> {
-        self.method_call(
-            "org.bluez.BatteryProviderManager1",
-            "UnregisterBatteryProvider",
-            (provider,),
-        )
-    }
-}
-
-pub trait OrgBluezGattManager1 {
-    fn register_application(
-        &self,
-        application: dbus::Path,
-        options: arg::PropMap,
-    ) -> Result<(), dbus::Error>;
-    fn unregister_application(&self, application: dbus::Path) -> Result<(), dbus::Error>;
-}
-
-impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluezGattManager1
-    for blocking::Proxy<'a, C>
-{
-    fn register_application(
-        &self,
-        application: dbus::Path,
-        options: arg::PropMap,
-    ) -> Result<(), dbus::Error> {
-        self.method_call(
-            "org.bluez.GattManager1",
-            "RegisterApplication",
-            (application, options),
-        )
-    }
-
-    fn unregister_application(&self, application: dbus::Path) -> Result<(), dbus::Error> {
-        self.method_call(
-            "org.bluez.GattManager1",
-            "UnregisterApplication",
-            (application,),
-        )
-    }
-}
-
-pub trait OrgBluezMedia1 {
-    fn register_endpoint(
-        &self,
-        endpoint: dbus::Path,
-        properties: arg::PropMap,
-    ) -> Result<(), dbus::Error>;
-    fn unregister_endpoint(&self, endpoint: dbus::Path) -> Result<(), dbus::Error>;
-    fn register_player(
-        &self,
-        player: dbus::Path,
-        properties: arg::PropMap,
-    ) -> Result<(), dbus::Error>;
-    fn unregister_player(&self, player: dbus::Path) -> Result<(), dbus::Error>;
-    fn register_application(
-        &self,
-        application: dbus::Path,
-        options: arg::PropMap,
-    ) -> Result<(), dbus::Error>;
-    fn unregister_application(&self, application: dbus::Path) -> Result<(), dbus::Error>;
-    fn supported_uuids(&self) -> Result<Vec<String>, dbus::Error>;
-}
-
-impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluezMedia1
-    for blocking::Proxy<'a, C>
-{
-    fn register_endpoint(
-        &self,
-        endpoint: dbus::Path,
-        properties: arg::PropMap,
-    ) -> Result<(), dbus::Error> {
-        self.method_call(
-            "org.bluez.Media1",
-            "RegisterEndpoint",
-            (endpoint, properties),
-        )
-    }
-
-    fn unregister_endpoint(&self, endpoint: dbus::Path) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.Media1", "UnregisterEndpoint", (endpoint,))
-    }
-
-    fn register_player(
-        &self,
-        player: dbus::Path,
-        properties: arg::PropMap,
-    ) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.Media1", "RegisterPlayer", (player, properties))
-    }
-
-    fn unregister_player(&self, player: dbus::Path) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.Media1", "UnregisterPlayer", (player,))
-    }
-
-    fn register_application(
-        &self,
-        application: dbus::Path,
-        options: arg::PropMap,
-    ) -> Result<(), dbus::Error> {
-        self.method_call(
-            "org.bluez.Media1",
-            "RegisterApplication",
-            (application, options),
-        )
-    }
-
-    fn unregister_application(&self, application: dbus::Path) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.Media1", "UnregisterApplication", (application,))
-    }
-
-    fn supported_uuids(&self) -> Result<Vec<String>, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Media1",
-            "SupportedUUIDs",
-        )
-    }
-}
-
-pub trait OrgBluezNetworkServer1 {
-    fn register(&self, uuid: &str, bridge: &str) -> Result<(), dbus::Error>;
-    fn unregister(&self, uuid: &str) -> Result<(), dbus::Error>;
-}
-
-impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluezNetworkServer1
-    for blocking::Proxy<'a, C>
-{
-    fn register(&self, uuid: &str, bridge: &str) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.NetworkServer1", "Register", (uuid, bridge))
-    }
-
-    fn unregister(&self, uuid: &str) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.NetworkServer1", "Unregister", (uuid,))
-    }
-}
-
-pub trait OrgBluezLEAdvertisingManager1 {
-    fn register_advertisement(
-        &self,
-        advertisement: dbus::Path,
-        options: arg::PropMap,
-    ) -> Result<(), dbus::Error>;
-    fn unregister_advertisement(&self, service: dbus::Path) -> Result<(), dbus::Error>;
-    fn active_instances(&self) -> Result<u8, dbus::Error>;
-    fn supported_instances(&self) -> Result<u8, dbus::Error>;
-    fn supported_includes(&self) -> Result<Vec<String>, dbus::Error>;
-    fn supported_secondary_channels(&self) -> Result<Vec<String>, dbus::Error>;
-    fn supported_features(&self) -> Result<Vec<String>, dbus::Error>;
-    fn supported_capabilities(&self) -> Result<arg::PropMap, dbus::Error>;
-}
-
-impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>>
-    OrgBluezLEAdvertisingManager1 for blocking::Proxy<'a, C>
-{
-    fn register_advertisement(
-        &self,
-        advertisement: dbus::Path,
-        options: arg::PropMap,
-    ) -> Result<(), dbus::Error> {
-        self.method_call(
-            "org.bluez.LEAdvertisingManager1",
-            "RegisterAdvertisement",
-            (advertisement, options),
-        )
-    }
-
-    fn unregister_advertisement(&self, service: dbus::Path) -> Result<(), dbus::Error> {
-        self.method_call(
-            "org.bluez.LEAdvertisingManager1",
-            "UnregisterAdvertisement",
-            (service,),
-        )
-    }
-
-    fn active_instances(&self) -> Result<u8, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.LEAdvertisingManager1",
-            "ActiveInstances",
-        )
-    }
-
-    fn supported_instances(&self) -> Result<u8, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.LEAdvertisingManager1",
-            "SupportedInstances",
-        )
-    }
-
-    fn supported_includes(&self) -> Result<Vec<String>, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.LEAdvertisingManager1",
-            "SupportedIncludes",
-        )
-    }
-
-    fn supported_secondary_channels(&self) -> Result<Vec<String>, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.LEAdvertisingManager1",
-            "SupportedSecondaryChannels",
-        )
-    }
-
-    fn supported_features(&self) -> Result<Vec<String>, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.LEAdvertisingManager1",
-            "SupportedFeatures",
-        )
-    }
-
-    fn supported_capabilities(&self) -> Result<arg::PropMap, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.LEAdvertisingManager1",
-            "SupportedCapabilities",
-        )
-    }
+    } */
 }

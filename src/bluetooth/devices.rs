@@ -32,8 +32,6 @@ pub struct Device<M: BluetoothManager> {
 
 enum InfoType<'a> {
     Boolean(&'a bool),
-    String(&'a String),
-    OptBoolean(&'a Option<bool>),
     OptString(&'a Option<String>),
     OptBattery(&'a Option<u8>),
 }
@@ -216,10 +214,10 @@ impl<M: BluetoothManager> Device<M> {
         for (prefix, property) in print_props {
             print_str = print_str
                 + &match property {
-                    InfoType::String(propval) | InfoType::OptString(Some(propval)) => {
+                    InfoType::OptString(Some(propval)) => {
                         format!("{prefix}{propval}")
                     }
-                    InfoType::Boolean(propval) | InfoType::OptBoolean(Some(propval)) => format!(
+                InfoType::Boolean(propval) => format!(
                         "{prefix}{}{}{ansi_reset}",
                         if *propval { ansi_green } else { ansi_red },
                         if *propval { "yes" } else { "no" }

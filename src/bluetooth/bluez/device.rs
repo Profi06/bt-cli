@@ -7,44 +7,44 @@ use dbus::blocking;
 pub trait OrgBluezDevice1 {
     fn disconnect(&self) -> Result<(), dbus::Error>;
     fn connect(&self) -> Result<(), dbus::Error>;
-    fn connect_profile(&self, uuid: &str) -> Result<(), dbus::Error>;
-    fn disconnect_profile(&self, uuid: &str) -> Result<(), dbus::Error>;
+    // fn connect_profile(&self, uuid: &str) -> Result<(), dbus::Error>;
+    // fn disconnect_profile(&self, uuid: &str) -> Result<(), dbus::Error>;
     fn pair(&self) -> Result<(), dbus::Error>;
-    fn cancel_pairing(&self) -> Result<(), dbus::Error>;
-    fn address(&self) -> Result<String, dbus::Error>;
-    fn address_type(&self) -> Result<String, dbus::Error>;
-    fn name(&self) -> Result<String, dbus::Error>;
-    fn alias(&self) -> Result<String, dbus::Error>;
-    fn set_alias(&self, value: String) -> Result<(), dbus::Error>;
-    fn class(&self) -> Result<u32, dbus::Error>;
-    fn appearance(&self) -> Result<u16, dbus::Error>;
-    fn icon(&self) -> Result<String, dbus::Error>;
-    fn paired(&self) -> Result<bool, dbus::Error>;
-    fn bonded(&self) -> Result<bool, dbus::Error>;
-    fn trusted(&self) -> Result<bool, dbus::Error>;
-    fn set_trusted(&self, value: bool) -> Result<(), dbus::Error>;
-    fn blocked(&self) -> Result<bool, dbus::Error>;
-    fn set_blocked(&self, value: bool) -> Result<(), dbus::Error>;
-    fn legacy_pairing(&self) -> Result<bool, dbus::Error>;
-    fn rssi(&self) -> Result<i16, dbus::Error>;
-    fn connected(&self) -> Result<bool, dbus::Error>;
-    fn uuids(&self) -> Result<Vec<String>, dbus::Error>;
-    fn modalias(&self) -> Result<String, dbus::Error>;
+    // fn cancel_pairing(&self) -> Result<(), dbus::Error>;
+    // fn address(&self) -> Result<String, dbus::Error>;
+    // fn address_type(&self) -> Result<String, dbus::Error>;
+    // fn name(&self) -> Result<String, dbus::Error>;
+    // fn alias(&self) -> Result<String, dbus::Error>;
+    // fn set_alias(&self, value: String) -> Result<(), dbus::Error>;
+    // fn class(&self) -> Result<u32, dbus::Error>;
+    // fn appearance(&self) -> Result<u16, dbus::Error>;
+    // fn icon(&self) -> Result<String, dbus::Error>;
+    // fn paired(&self) -> Result<bool, dbus::Error>;
+    // fn bonded(&self) -> Result<bool, dbus::Error>;
+    // fn trusted(&self) -> Result<bool, dbus::Error>;
+    // fn set_trusted(&self, value: bool) -> Result<(), dbus::Error>;
+    // fn blocked(&self) -> Result<bool, dbus::Error>;
+    // fn set_blocked(&self, value: bool) -> Result<(), dbus::Error>;
+    // fn legacy_pairing(&self) -> Result<bool, dbus::Error>;
+    // fn rssi(&self) -> Result<i16, dbus::Error>;
+    // fn connected(&self) -> Result<bool, dbus::Error>;
+    // fn uuids(&self) -> Result<Vec<String>, dbus::Error>;
+    // fn modalias(&self) -> Result<String, dbus::Error>;
     fn adapter(&self) -> Result<dbus::Path<'static>, dbus::Error>;
-    fn manufacturer_data(
-        &self,
-    ) -> Result<
-        ::std::collections::HashMap<u16, arg::Variant<Box<dyn arg::RefArg + 'static>>>,
-        dbus::Error,
-    >;
-    fn service_data(&self) -> Result<arg::PropMap, dbus::Error>;
-    fn tx_power(&self) -> Result<i16, dbus::Error>;
-    fn services_resolved(&self) -> Result<bool, dbus::Error>;
-    fn wake_allowed(&self) -> Result<bool, dbus::Error>;
-    fn set_wake_allowed(&self, value: bool) -> Result<(), dbus::Error>;
-    fn sets(
-        &self,
-    ) -> Result<::std::collections::HashMap<dbus::Path<'static>, arg::PropMap>, dbus::Error>;
+    // fn manufacturer_data(
+    //     &self,
+    // ) -> Result<
+    //     ::std::collections::HashMap<u16, arg::Variant<Box<dyn arg::RefArg + 'static>>>,
+    //     dbus::Error,
+    // >;
+    // fn service_data(&self) -> Result<arg::PropMap, dbus::Error>;
+    // fn tx_power(&self) -> Result<i16, dbus::Error>;
+    // fn services_resolved(&self) -> Result<bool, dbus::Error>;
+    // fn wake_allowed(&self) -> Result<bool, dbus::Error>;
+    // fn set_wake_allowed(&self, value: bool) -> Result<(), dbus::Error>;
+    // fn sets(
+    //     &self,
+    // ) -> Result<::std::collections::HashMap<dbus::Path<'static>, arg::PropMap>, dbus::Error>;
 }
 
 impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluezDevice1
@@ -57,7 +57,7 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
     fn connect(&self) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Device1", "Connect", ())
     }
-
+/*
     fn connect_profile(&self, uuid: &str) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Device1", "ConnectProfile", (uuid,))
     }
@@ -65,11 +65,11 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
     fn disconnect_profile(&self, uuid: &str) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Device1", "DisconnectProfile", (uuid,))
     }
-
+*/
     fn pair(&self) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Device1", "Pair", ())
     }
-
+/*
     fn cancel_pairing(&self) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Device1", "CancelPairing", ())
     }
@@ -201,7 +201,7 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
             "Modalias",
         )
     }
-
+*/
     fn adapter(&self) -> Result<dbus::Path<'static>, dbus::Error> {
         <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
             self,
@@ -209,7 +209,7 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
             "Adapter",
         )
     }
-
+/*
     fn manufacturer_data(
         &self,
     ) -> Result<
@@ -299,104 +299,10 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
             "WakeAllowed",
             value,
         )
-    }
+    } */
 }
-
-pub trait OrgFreedesktopDBusProperties {
-    fn get<R0: for<'b> arg::Get<'b> + 'static>(
-        &self,
-        interface: &str,
-        name: &str,
-    ) -> Result<R0, dbus::Error>;
-    fn set<I2: arg::Arg + arg::Append>(
-        &self,
-        interface: &str,
-        name: &str,
-        value: I2,
-    ) -> Result<(), dbus::Error>;
-    fn get_all(&self, interface: &str) -> Result<arg::PropMap, dbus::Error>;
-}
-
-#[derive(Debug)]
-pub struct OrgFreedesktopDBusPropertiesPropertiesChanged {
-    pub interface: String,
-    pub changed_properties: arg::PropMap,
-    pub invalidated_properties: Vec<String>,
-}
-
-impl arg::AppendAll for OrgFreedesktopDBusPropertiesPropertiesChanged {
-    fn append(&self, i: &mut arg::IterAppend) {
-        arg::RefArg::append(&self.interface, i);
-        arg::RefArg::append(&self.changed_properties, i);
-        arg::RefArg::append(&self.invalidated_properties, i);
-    }
-}
-
-impl arg::ReadAll for OrgFreedesktopDBusPropertiesPropertiesChanged {
-    fn read(i: &mut arg::Iter) -> Result<Self, arg::TypeMismatchError> {
-        Ok(OrgFreedesktopDBusPropertiesPropertiesChanged {
-            interface: i.read()?,
-            changed_properties: i.read()?,
-            invalidated_properties: i.read()?,
-        })
-    }
-}
-
-impl dbus::message::SignalArgs for OrgFreedesktopDBusPropertiesPropertiesChanged {
-    const NAME: &'static str = "PropertiesChanged";
-    const INTERFACE: &'static str = "org.freedesktop.DBus.Properties";
-}
-
-impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgFreedesktopDBusProperties
-    for blocking::Proxy<'a, C>
-{
-    fn get<R0: for<'b> arg::Get<'b> + 'static>(
-        &self,
-        interface: &str,
-        name: &str,
-    ) -> Result<R0, dbus::Error> {
-        self.method_call("org.freedesktop.DBus.Properties", "Get", (interface, name))
-            .and_then(|r: (arg::Variant<R0>,)| Ok((r.0).0))
-    }
-
-    fn set<I2: arg::Arg + arg::Append>(
-        &self,
-        interface: &str,
-        name: &str,
-        value: I2,
-    ) -> Result<(), dbus::Error> {
-        self.method_call(
-            "org.freedesktop.DBus.Properties",
-            "Set",
-            (interface, name, arg::Variant(value)),
-        )
-    }
-
-    fn get_all(&self, interface: &str) -> Result<arg::PropMap, dbus::Error> {
-        self.method_call("org.freedesktop.DBus.Properties", "GetAll", (interface,))
-            .and_then(|r: (arg::PropMap,)| Ok(r.0))
-    }
-}
-
+/*
 pub trait OrgBluezMediaControl1 {
-    #[deprecated(note = "true")]
-    fn play(&self) -> Result<(), dbus::Error>;
-    #[deprecated(note = "true")]
-    fn pause(&self) -> Result<(), dbus::Error>;
-    #[deprecated(note = "true")]
-    fn stop(&self) -> Result<(), dbus::Error>;
-    #[deprecated(note = "true")]
-    fn next(&self) -> Result<(), dbus::Error>;
-    #[deprecated(note = "true")]
-    fn previous(&self) -> Result<(), dbus::Error>;
-    #[deprecated(note = "true")]
-    fn volume_up(&self) -> Result<(), dbus::Error>;
-    #[deprecated(note = "true")]
-    fn volume_down(&self) -> Result<(), dbus::Error>;
-    #[deprecated(note = "true")]
-    fn fast_forward(&self) -> Result<(), dbus::Error>;
-    #[deprecated(note = "true")]
-    fn rewind(&self) -> Result<(), dbus::Error>;
     fn connected(&self) -> Result<bool, dbus::Error>;
     fn player(&self) -> Result<dbus::Path<'static>, dbus::Error>;
 }
@@ -404,42 +310,6 @@ pub trait OrgBluezMediaControl1 {
 impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluezMediaControl1
     for blocking::Proxy<'a, C>
 {
-    fn play(&self) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.MediaControl1", "Play", ())
-    }
-
-    fn pause(&self) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.MediaControl1", "Pause", ())
-    }
-
-    fn stop(&self) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.MediaControl1", "Stop", ())
-    }
-
-    fn next(&self) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.MediaControl1", "Next", ())
-    }
-
-    fn previous(&self) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.MediaControl1", "Previous", ())
-    }
-
-    fn volume_up(&self) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.MediaControl1", "VolumeUp", ())
-    }
-
-    fn volume_down(&self) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.MediaControl1", "VolumeDown", ())
-    }
-
-    fn fast_forward(&self) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.MediaControl1", "FastForward", ())
-    }
-
-    fn rewind(&self) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.MediaControl1", "Rewind", ())
-    }
-
     fn connected(&self) -> Result<bool, dbus::Error> {
         <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
             self,
@@ -456,7 +326,7 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
         )
     }
 }
-
+/* */
 pub trait OrgBluezBattery1 {
     fn percentage(&self) -> Result<u8, dbus::Error>;
     fn source(&self) -> Result<String, dbus::Error>;
@@ -480,4 +350,4 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
             "Source",
         )
     }
-}
+} */
