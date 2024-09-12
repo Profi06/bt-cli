@@ -3,8 +3,10 @@ pub mod agent_manager;
 pub mod device;
 pub mod adapter;
 
+use crate::utils::ansi::ANSI_RESET;
 use super::devices::Device;
 use super::{BluetoothManager, Devices};
+use std::io::{stdout, Write};
 use std::{
     thread,
     collections::HashMap,
@@ -26,13 +28,14 @@ pub const BLUEZ_DBUS: &str = "org.bluez";
 pub const ADAPTER_INTERFACE: &str = "org.bluez.Adapter1";
 pub const DEVICE_INTERFACE: &str = "org.bluez.Device1";
 pub const BATTERY_INTERFACE: &str = "org.bluez.Battery1";
-const DBUS_TIMEOUT: Duration = Duration::new(5, 0);
+const DBUS_TIMEOUT: Duration = Duration::new(60, 0);
 
 pub struct DBusBluetoothManager {
     connection: Connection,
     address_dbus_paths: HashMap<String, Path<'static>>,
     devices: Devices<Self>,
     adapter_paths: Vec<Path<'static>>,
+    scan_display_hint: bool,
 }
 
 impl DBusBluetoothManager {
@@ -43,6 +46,7 @@ impl DBusBluetoothManager {
             address_dbus_paths: HashMap::new(),
             devices: Vec::new(), 
             adapter_paths: Vec::new(),
+            scan_display_hint: true,
         })
     }
     fn _create_device_proxy<'a: 'b, 'b>(&'a self, address: &'b str) 
@@ -52,11 +56,15 @@ impl DBusBluetoothManager {
             Some(self.connection.with_proxy(BLUEZ_DBUS, path, 
                 DBUS_TIMEOUT))
         )
+    }   
+
+    pub fn set_scan_display_hint(&mut self, scan_display_hint: bool) {
+        self.scan_display_hint = scan_display_hint;
     }
 }
 
 impl BluetoothManager for DBusBluetoothManager {
-    fn update(&mut self) {
+    fn update(&mut self) -> &mut Self {
         self.devices = Vec::new();
         self.adapter_paths = Vec::new();
         if let Ok(objects) = self.connection
@@ -66,7 +74,7 @@ impl BluetoothManager for DBusBluetoothManager {
                     if let Some(_) = interfaces.get(ADAPTER_INTERFACE) {
                         self.adapter_paths.push(path);
                     } else if let Some(d_props) = interfaces.get(DEVICE_INTERFACE) {
-                        let address: String = prop_cast::<String>(d_props, "Address")
+                        let address = prop_cast::<String>(d_props, "Address")
                             .cloned().expect("Address is required");
                         // alias is used for device.name, not device.name
                         let alias = prop_cast::<String>(d_props, "Alias")
@@ -109,6 +117,7 @@ impl BluetoothManager for DBusBluetoothManager {
                     };
                 }
             }
+        self
     }
 
     fn get_all_devices(&self) -> Devices<Self> {
@@ -122,16 +131,24 @@ impl BluetoothManager for DBusBluetoothManager {
         todo!()
     }
 
-    fn scan(&self, duration: &Duration) {
+    fn scan(&self, duration: &Duration) -> &Self {
         for a_path in &self.adapter_paths {
             let proxy = self.connection
                 .with_proxy(BLUEZ_DBUS, a_path, DBUS_TIMEOUT);
             let discovering = proxy.start_discovery().is_ok();
             if discovering {
+                if self.scan_display_hint {
+                    print!("\x1b[2;37mScanning for devices...{ANSI_RESET}");
+                    let _ = stdout().flush();
+                }
                 thread::sleep(*duration);
                 let _ = proxy.stop_discovery();
+                if self.scan_display_hint {
+                    print!("\x1b[1K\r");
+                }
             }
         }
+        &self
     }
 
 

@@ -10,7 +10,7 @@ use super::BluetoothManager;
 pub struct Device<M: BluetoothManager> {
     pub address: String,
     pub name: String,
-    pub bluetooth_manager: Weak<M>,
+    pub bluetooth_manager: Weak<Mutex<M>>,
 
     pub paired: bool,
     pub bonded: bool,
@@ -48,7 +48,7 @@ impl<M: BluetoothManager>  Device<M> {
         Device {
             address,
             name,
-            bluetooth_manager: Weak::<M>::new(),
+            bluetooth_manager: Weak::<Mutex<M>>::new(),
 
             paired,
             bonded,
@@ -69,7 +69,9 @@ impl<M: BluetoothManager>  Device<M> {
         println!("Attempting to pair with {}...", self.get_name_colored());
         pairable(true);
         let success = self.bluetooth_manager.upgrade().is_some_and(|bt_man| {
-            bt_man.pair_device(&self.address)
+            bt_man
+                .lock().expect("Mutex should not be poisoned.")
+                .pair_device(&self.address)
             });
         pairable(false);
         if success {
@@ -84,7 +86,9 @@ impl<M: BluetoothManager>  Device<M> {
     /// Unpairs the device. Only fails if bluetooth_manager is invalid.
     pub fn unpair(&mut self) -> bool {
         let success = self.bluetooth_manager.upgrade().is_some_and(|bt_man| {
-            bt_man.unpair_device(&self.address);
+            bt_man
+                .lock().expect("Mutex should not be poisoned.")
+                .unpair_device(&self.address);
             true
             });
         if success {
@@ -101,7 +105,9 @@ impl<M: BluetoothManager>  Device<M> {
     pub fn connect(&mut self) -> bool {
         println!("Attempting to connect with {}...", self.get_name_colored());
         let success = self.bluetooth_manager.upgrade().is_some_and(|bt_man| {
-            bt_man.connect_device(&self.address)
+            bt_man
+                .lock().expect("Mutex should not be poisoned.")
+                .connect_device(&self.address)
             });
         if success {
             self.connected = true;
@@ -116,7 +122,9 @@ impl<M: BluetoothManager>  Device<M> {
     /// Disconnects the device. Only fails if bluetooth_manager is invalid.
     pub fn disconnect(&mut self) -> bool {
         let success = self.bluetooth_manager.upgrade().is_some_and(|bt_man| {
-            bt_man.disconnect_device(&self.address);
+            bt_man
+                .lock().expect("Mutex should not be poisoned.")
+                .disconnect_device(&self.address);
             true
             });
         if success {
@@ -253,7 +261,7 @@ pub type Devices<M> = Vec<Arc<Mutex<Device<M>>>>;
 
 pub struct DeviceList<M: BluetoothManager> {
     devices: Devices<M>,
-    bluetooth_manager: Arc<M>,
+    bluetooth_manager: Arc<Mutex<M>>,
 
     // Following properties are saved for output
     quote_names: bool,
@@ -271,7 +279,7 @@ pub enum FilterBehaviour {
 
 impl<M: BluetoothManager> DeviceList<M> {
     /// Create a new empty device list
-    pub fn new(bluetooth_manager: Arc<M>) -> DeviceList<M> {
+    pub fn new(bluetooth_manager: Arc<Mutex<M>>) -> DeviceList<M> {
         DeviceList { 
             devices: Vec::new(), 
             bluetooth_manager,
