@@ -1,31 +1,39 @@
 // vim: cc=81
 pub mod adapter;
-// pub mod agent_manager;
+pub mod agent;
+pub mod agent_manager;
 pub mod device;
 
 use super::devices::Device;
 use super::{BluetoothManager, Devices};
 use crate::utils::ansi::ANSI_RESET;
 use adapter::OrgBluezAdapter1;
+use agent::OrgBluezAgent1;
 use dbus::arg::prop_cast;
 use dbus::{
     blocking::{stdintf::org_freedesktop_dbus::ObjectManager, Connection, Proxy},
     Path,
 };
 use device::OrgBluezDevice1;
-use std::io::{stdout, Write};
+use std::io::{Read, Write};
 use std::{
     collections::HashMap,
+    io,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
 
 pub const BLUEZ_DBUS: &str = "org.bluez";
+
 pub const ADAPTER_INTERFACE: &str = "org.bluez.Adapter1";
 pub const DEVICE_INTERFACE: &str = "org.bluez.Device1";
 pub const BATTERY_INTERFACE: &str = "org.bluez.Battery1";
+
 const DBUS_TIMEOUT: Duration = Duration::new(60, 0);
+
+const BLUEZ_REJECTED_ERROR: &str = "org.bluez.Error.Rejected";
+const BLUEZ_CANCELED_ERROR: &str = "org.bluez.Error.Canceled";
 
 pub struct DBusBluetoothManager {
     connection: Connection,
@@ -46,6 +54,7 @@ impl DBusBluetoothManager {
             scan_display_hint: true,
         })
     }
+
     fn _create_device_proxy<'a: 'b, 'b>(
         &'a self,
         address: &'b str,
@@ -135,7 +144,7 @@ impl BluetoothManager for DBusBluetoothManager {
             if discovering {
                 if self.scan_display_hint {
                     print!("\x1b[2;37mScanning for devices...{ANSI_RESET}");
-                    let _ = stdout().flush();
+                    let _ = io::stdout().flush();
                 }
                 thread::sleep(*duration);
                 let _ = proxy.stop_discovery();
@@ -190,5 +199,149 @@ impl BluetoothManager for DBusBluetoothManager {
         if let Some(proxy) = self._create_device_proxy(address) {
             let _ = proxy.disconnect();
         };
+    }
+}
+
+struct DBusBluetoothAgent<'a> {
+    device: &'a Device<DBusBluetoothManager>,
+    device_path: dbus::Path<'static>,
+}
+
+impl OrgBluezAgent1 for DBusBluetoothAgent<'_> {
+    fn release(&mut self) -> Result<(), dbus::MethodErr> {
+        Ok(())
+    }
+
+    fn request_pin_code(&mut self, device: dbus::Path<'static>) -> Result<String, dbus::MethodErr> {
+        if device != self.device_path {
+            return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
+        }
+        let device_name = self.device.get_name_colored();
+        println!(
+            "Please enter the pin code displayed on {device_name}. \
+            (1-16 symbols, empty input to cancel)"
+        );
+        let mut pin_code = String::new();
+        while io::stdin().read_line(&mut pin_code).is_err() || pin_code.len() > 16 {
+            println!(
+                "Please enter the pin code displayed on {device_name}. \
+                (1-16 symbols, empty input to cancel)"
+            );
+            pin_code = String::new();
+        }
+        if pin_code.is_empty() {
+            println!("Empty input, canceling.");
+            return Err(dbus::Error::new_custom(BLUEZ_CANCELED_ERROR, "").into());
+        }
+        Ok(pin_code)
+    }
+
+    fn display_pin_code(
+        &mut self,
+        device: dbus::Path<'static>,
+        pincode: String,
+    ) -> Result<(), dbus::MethodErr> {
+        if device != self.device_path {
+            return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
+        }
+        let device_name = self.device.get_name_colored();
+        println!("The pincode for {device_name} is {pincode}.");
+        Ok(())
+    }
+
+    fn request_passkey(&mut self, device: dbus::Path<'static>) -> Result<u32, dbus::MethodErr> {
+        if device != self.device_path {
+            return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
+        }
+        let device_name = self.device.get_name_colored();
+        println!(
+            "Please enter the passkey displayed on {device_name}. \
+            (6 digits, empty input to cancel)"
+        );
+        let mut passkey = String::new();
+        let mut read_result = io::stdin().read_line(&mut passkey);
+        loop {
+            if read_result.is_ok() {
+                let trimmed = passkey.trim();
+                if trimmed.is_empty() {
+                    println!("Empty input, canceling.");
+                    return Err(dbus::Error::new_custom(BLUEZ_CANCELED_ERROR, "").into());
+                } else if let Ok(parsed) = trimmed.parse() {
+                    if parsed < 1_000_000 {
+                        return Ok(parsed);
+                    }
+                }
+            }
+            println!(
+                "Please enter the passkey displayed on {device_name}. \
+                (6 digits, empty input to cancel)"
+            );
+            passkey = String::new();
+            read_result = io::stdin().read_line(&mut passkey);
+        }
+    }
+
+    fn display_passkey(
+        &mut self,
+        device: dbus::Path<'static>,
+        passkey: u32,
+        entered: u16,
+    ) -> Result<(), dbus::MethodErr> {
+        if device != self.device_path {
+            return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
+        }
+        let device_name = self.device.get_name_colored();
+        println!("The pincode for {device_name} is {passkey:06}.");
+        Ok(())
+    }
+
+    fn request_confirmation(
+        &mut self,
+        device: dbus::Path<'static>,
+        passkey: u32,
+    ) -> Result<(), dbus::MethodErr> {
+        if device != self.device_path {
+            return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
+        }
+        let device_name = self.device.get_name_colored();
+        println!("Does {passkey:06} match the pincode on {device_name}? [y/n]");
+        let mut answer = [0u8];
+        let mut read_result = io::stdin().read(&mut answer);
+        loop {
+            if let Ok(1) = read_result {
+                if answer[0] == b'y' {
+                    return Ok(());
+                } else if answer[0] == b'n' {
+                    return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
+                }
+            }
+            println!("Does {passkey:06} match the pincode on {device_name}? [y/n]");
+            read_result = io::stdin().read(&mut answer);
+        }
+    }
+
+    fn request_authoritation(
+        &mut self,
+        device: dbus::Path<'static>,
+    ) -> Result<(), dbus::MethodErr> {
+        if device != self.device_path {
+            return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
+        }
+        Ok(())
+    }
+
+    fn authorize_service(
+        &mut self,
+        device: dbus::Path<'static>,
+        _uuid: String,
+    ) -> Result<(), dbus::MethodErr> {
+        if device != self.device_path {
+            return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
+        }
+        Ok(())
+    }
+
+    fn cancel(&mut self) -> Result<(), dbus::MethodErr> {
+        Ok(())
     }
 }
