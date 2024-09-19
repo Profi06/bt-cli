@@ -114,7 +114,7 @@ fn get_timeout(param: &Option<u64>, default: u64) -> u64 {
 
 fn get_behaviour(matches: &ArgMatches) -> FilterBehaviour {
     let partial = *matches.get_one::<bool>("partial").unwrap_or(&true)
-        && !matches.get_one::<bool>("no-partial").unwrap_or(&false);
+        || !matches.get_one::<bool>("no-partial").unwrap_or(&false);
     let regex = *matches.get_one::<bool>("regex").unwrap_or(&false)
         && !matches.get_one::<bool>("no-regex").unwrap_or(&true);
     if partial {
