@@ -4,22 +4,26 @@ pub mod agent;
 pub mod agent_manager;
 pub mod device;
 
-use super::devices::Device;
-use super::{BluetoothManager, Devices};
+use agent_manager::OrgBluezAgentManager1;
+
+use super::{BluetoothManager, Devices, Device};
 use crate::utils::ansi::ANSI_RESET;
 use adapter::OrgBluezAdapter1;
 use agent::OrgBluezAgent1;
-use dbus::arg::prop_cast;
 use dbus::{
+    message::MatchRule,
+    channel::{MatchingReceiver, Sender, Token},
+    arg::prop_cast,
     blocking::{stdintf::org_freedesktop_dbus::ObjectManager, Connection, Proxy},
+    Message,
     Path,
 };
+use dbus_crossroads::Crossroads;
 use device::OrgBluezDevice1;
-use std::io::{Read, Write};
 use std::{
     collections::HashMap,
-    io,
-    sync::{Arc, Mutex},
+    io::{self, Read, Write},
+    sync::{Arc, Mutex, RwLock},
     thread,
     time::Duration,
 };
@@ -62,6 +66,37 @@ impl DBusBluetoothManager {
         self.address_dbus_paths
             .get(address)
             .and_then(|path| Some(self.connection.with_proxy(BLUEZ_DBUS, path, DBUS_TIMEOUT)))
+    }
+
+    /// Creates a DBusBluetoothAgent for the device with address.
+    fn _create_agent(&self, device: &Device<Self>) -> Option<DBusBluetoothAgent> {
+        let device_path = self.address_dbus_paths.get(&device.address).cloned()?;
+        Some(DBusBluetoothAgent {
+            device_name: device.get_name_colored(),
+            device_path
+        })
+    }
+
+    /// Creates a DBusBluetoothAgent and registers it with self.connection
+    fn _register_agent(&self, device: &Device<Self>) -> Option<Token> {
+        let mut cr = Crossroads::new();
+        let iface_token = agent::register_org_bluez_agent1(&mut cr);
+        let agent = self._create_agent(device)?;
+
+        cr.insert("/agent", &[iface_token], agent);
+        let token = Some(self.connection.start_receive(
+            MatchRule::new_method_call().with_path("/agent\0"), 
+            Box::new(move |msg, conn| {
+                cr.handle_message(msg, conn).is_ok()
+            })));
+        match self.connection.with_proxy(BLUEZ_DBUS, "/org/bluez", DBUS_TIMEOUT)
+            .register_agent("/agent\0".into(), "KeyboardDisplay") {
+            Ok(_) => token,
+            Err(_) => {
+                self.connection.stop_receive(token?);
+                None
+            },
+        }
     }
 
     pub fn set_scan_display_hint(&mut self, scan_display_hint: bool) {
@@ -156,16 +191,53 @@ impl BluetoothManager for DBusBluetoothManager {
         &self
     }
 
-    fn pair_device(&self, device: &Device<DBusBluetoothManager>) -> bool {
+    fn pair_device(&self, device: &Device<Self>) -> bool {
         self._create_device_proxy(&device.address)
-            .is_some_and(|proxy| match proxy.pair() {
-                Ok(_) => true,
-                // Also return true if the device is already paired
-                Err(error) => error.name() == Some("org.bluez.Error.AlreadyExists"),
+            .is_some_and(|proxy| {
+                // Cannot call proxy method directly because that would block 
+                // the pairing agent, so matches are used instead.
+
+                // Variables for communication between closure and this scope
+                let return_value = Arc::new(Mutex::new(false));
+                let return_value_closure = Arc::clone(&return_value);
+                let answer_pending = Arc::new(Mutex::new(true));
+                let answer_pending_closure = Arc::clone(&answer_pending);
+                let agent_token = self._register_agent(device);
+
+                if let Ok(msg) = Message::new_method_call(
+                    proxy.destination, proxy.path, "org.bluez.Device1", "Pair") 
+                {
+                    let pair_reply_serial = self.connection.send(msg).ok();
+                    let pair_token = self.connection.start_receive(
+                        MatchRule::new().with_sender(BLUEZ_DBUS), 
+                        Box::new(move |mut answer, _conn| {
+                            if pair_reply_serial != answer.get_reply_serial() {
+                                // Not the reply, continue receiving
+                                return true;
+                            }
+                            // Is answer
+                            let is_paired = match answer.as_result() {
+                                Ok(_) => true,
+                                // Also return true if the device is already paired
+                                Err(error) => error.name() == Some("org.bluez.Error.AlreadyExists"),
+                            };
+                            *return_value_closure.lock().expect("Mutex should not be poisoned.") = is_paired;
+                            *answer_pending_closure.lock().expect("Mutex should not be poisoned.") = false;
+                            return false;
+                        }));
+                    while answer_pending.lock().is_ok_and(|pending| *pending) {
+                        let _ = self.connection.process(DBUS_TIMEOUT);
+                    }
+                    self.connection.stop_receive(pair_token);
+                }
+                if let Some(agent_token) = agent_token {
+                    self.connection.stop_receive(agent_token);
+                }
+                return_value.lock().is_ok_and(|val| *val)
             })
     }
 
-    fn unpair_device(&self, device: &Device<DBusBluetoothManager>) {
+    fn unpair_device(&self, device: &Device<Self>) {
         // Get DBus Path to device
         if let Some(d_path) = self
             .address_dbus_paths
@@ -186,7 +258,7 @@ impl BluetoothManager for DBusBluetoothManager {
         };
     }
 
-    fn connect_device(&self, device: &Device<DBusBluetoothManager>) -> bool {
+    fn connect_device(&self, device: &Device<Self>) -> bool {
         self._create_device_proxy(&device.address)
             .is_some_and(|proxy| match proxy.connect() {
                 Ok(_) => true,
@@ -195,19 +267,19 @@ impl BluetoothManager for DBusBluetoothManager {
             })
     }
 
-    fn disconnect_device(&self, device: &Device<DBusBluetoothManager>) {
+    fn disconnect_device(&self, device: &Device<Self>) {
         if let Some(proxy) = self._create_device_proxy(&device.address) {
             let _ = proxy.disconnect();
         };
     }
 }
 
-struct DBusBluetoothAgent<'a> {
-    device: &'a Device<DBusBluetoothManager>,
+struct DBusBluetoothAgent {
+    device_name: String,
     device_path: dbus::Path<'static>,
 }
 
-impl OrgBluezAgent1 for DBusBluetoothAgent<'_> {
+impl OrgBluezAgent1 for DBusBluetoothAgent {
     fn release(&mut self) -> Result<(), dbus::MethodErr> {
         Ok(())
     }
@@ -216,7 +288,7 @@ impl OrgBluezAgent1 for DBusBluetoothAgent<'_> {
         if device != self.device_path {
             return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
         }
-        let device_name = self.device.get_name_colored();
+        let device_name = &self.device_name;
         println!(
             "Please enter the pin code displayed on {device_name}. \
             (1-16 symbols, empty input to cancel)"
@@ -244,7 +316,7 @@ impl OrgBluezAgent1 for DBusBluetoothAgent<'_> {
         if device != self.device_path {
             return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
         }
-        let device_name = self.device.get_name_colored();
+        let device_name = &self.device_name;
         println!("The pincode for {device_name} is {pincode}.");
         Ok(())
     }
@@ -253,7 +325,7 @@ impl OrgBluezAgent1 for DBusBluetoothAgent<'_> {
         if device != self.device_path {
             return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
         }
-        let device_name = self.device.get_name_colored();
+        let device_name = &self.device_name;
         println!(
             "Please enter the passkey displayed on {device_name}. \
             (6 digits, empty input to cancel)"
@@ -285,12 +357,12 @@ impl OrgBluezAgent1 for DBusBluetoothAgent<'_> {
         &mut self,
         device: dbus::Path<'static>,
         passkey: u32,
-        entered: u16,
+        _entered: u16,
     ) -> Result<(), dbus::MethodErr> {
         if device != self.device_path {
             return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
         }
-        let device_name = self.device.get_name_colored();
+        let device_name = &self.device_name;
         println!("The pincode for {device_name} is {passkey:06}.");
         Ok(())
     }
@@ -303,7 +375,7 @@ impl OrgBluezAgent1 for DBusBluetoothAgent<'_> {
         if device != self.device_path {
             return Err(dbus::Error::new_custom(BLUEZ_REJECTED_ERROR, "").into());
         }
-        let device_name = self.device.get_name_colored();
+        let device_name = &self.device_name;
         println!("Does {passkey:06} match the pincode on {device_name}? [y/n]");
         let mut answer = [0u8];
         let mut read_result = io::stdin().read(&mut answer);
