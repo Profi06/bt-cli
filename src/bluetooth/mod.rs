@@ -4,7 +4,7 @@ pub mod devices;
 
 use std::time::Duration;
 
-pub use devices::{DeviceList, Devices};
+pub use devices::{DeviceList, Devices, Device};
 
 pub trait BluetoothManager {
     /// Updates the BluetoothManager lists of devices and adapters
@@ -23,15 +23,23 @@ pub trait BluetoothManager {
         self.scan(duration);
         self
     }
-
+    
     /// Attempts to pair a device. The returned value indicates whether the
     /// device is now paired, also returning true it was already paired.
-    fn pair_device(&self, address: &str) -> bool;
+    fn pair_device(&self, device: &Device<Self>) -> bool
+    where
+        Self: Sized;
     /// Unpairs a device.
-    fn unpair_device(&self, address: &str);
+    fn unpair_device(&self, device: &Device<Self>)
+    where
+        Self: Sized;
     /// Attempts to connect a device. The returned value indicates whether the
     /// device is now connected, also returning true it was already connected.
-    fn connect_device(&self, address: &str) -> bool;
+    fn connect_device(&self, device: &Device<Self>) -> bool
+    where
+        Self: Sized;
     /// Disconnects a device.
-    fn disconnect_device(&self, address: &str);
+    fn disconnect_device(&self, device: &Device<Self>)
+    where
+        Self: Sized;
 }

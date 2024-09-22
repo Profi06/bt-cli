@@ -73,7 +73,7 @@ impl<M: BluetoothManager> Device<M> {
             bt_man
                 .lock()
                 .expect("Mutex should not be poisoned.")
-                .pair_device(&self.address)
+                .pair_device(&self)
         });
         pairable(false);
         if success {
@@ -91,7 +91,7 @@ impl<M: BluetoothManager> Device<M> {
             bt_man
                 .lock()
                 .expect("Mutex should not be poisoned.")
-                .unpair_device(&self.address);
+                .unpair_device(&self);
             true
         });
         if success {
@@ -111,7 +111,7 @@ impl<M: BluetoothManager> Device<M> {
             bt_man
                 .lock()
                 .expect("Mutex should not be poisoned.")
-                .connect_device(&self.address)
+                .connect_device(&self)
         });
         if success {
             self.connected = true;
@@ -128,7 +128,7 @@ impl<M: BluetoothManager> Device<M> {
             bt_man
                 .lock()
                 .expect("Mutex should not be poisoned.")
-                .disconnect_device(&self.address);
+                .disconnect_device(&self);
             true
         });
         if success {

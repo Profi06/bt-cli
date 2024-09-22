@@ -156,8 +156,8 @@ impl BluetoothManager for DBusBluetoothManager {
         &self
     }
 
-    fn pair_device(&self, address: &str) -> bool {
-        self._create_device_proxy(address)
+    fn pair_device(&self, device: &Device<DBusBluetoothManager>) -> bool {
+        self._create_device_proxy(&device.address)
             .is_some_and(|proxy| match proxy.pair() {
                 Ok(_) => true,
                 // Also return true if the device is already paired
@@ -165,11 +165,11 @@ impl BluetoothManager for DBusBluetoothManager {
             })
     }
 
-    fn unpair_device(&self, address: &str) {
+    fn unpair_device(&self, device: &Device<DBusBluetoothManager>) {
         // Get DBus Path to device
         if let Some(d_path) = self
             .address_dbus_paths
-            .get(address)
+            .get(&device.address)
             .and_then(|path| Path::new(path.to_string()).ok())
         {
             // Get adapter that manages device via proxy
@@ -186,8 +186,8 @@ impl BluetoothManager for DBusBluetoothManager {
         };
     }
 
-    fn connect_device(&self, address: &str) -> bool {
-        self._create_device_proxy(address)
+    fn connect_device(&self, device: &Device<DBusBluetoothManager>) -> bool {
+        self._create_device_proxy(&device.address)
             .is_some_and(|proxy| match proxy.connect() {
                 Ok(_) => true,
                 // Also return true if the device is already connected
@@ -195,8 +195,8 @@ impl BluetoothManager for DBusBluetoothManager {
             })
     }
 
-    fn disconnect_device(&self, address: &str) {
-        if let Some(proxy) = self._create_device_proxy(address) {
+    fn disconnect_device(&self, device: &Device<DBusBluetoothManager>) {
+        if let Some(proxy) = self._create_device_proxy(&device.address) {
             let _ = proxy.disconnect();
         };
     }
