@@ -9,7 +9,7 @@ pub fn build_cli() -> Command {
     let timeout_arg = Arg::new("timeout")
         .short('t')
         .long("timeout")
-        .value_parser(value_parser!(u32))
+        .value_parser(value_parser!(u64))
         .help("Timeout for scanning and pairing attempts in seconds")
         .long_help(
             "Timeout for scanning and pairing attempts in seconds\n\
