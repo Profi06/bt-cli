@@ -42,11 +42,11 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
     fn start_discovery(&self) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Adapter1", "StartDiscovery", ())
     }
-/*
-    fn set_discovery_filter(&self, properties: arg::PropMap) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.Adapter1", "SetDiscoveryFilter", (properties,))
-    }
-*/
+    /*
+        fn set_discovery_filter(&self, properties: arg::PropMap) -> Result<(), dbus::Error> {
+            self.method_call("org.bluez.Adapter1", "SetDiscoveryFilter", (properties,))
+        }
+    */
     fn stop_discovery(&self) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Adapter1", "StopDiscovery", ())
     }
@@ -54,7 +54,7 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
     fn remove_device(&self, device: dbus::Path) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Adapter1", "RemoveDevice", (device,))
     }
-/*
+    /*
     fn get_discovery_filters(&self) -> Result<Vec<String>, dbus::Error> {
         self.method_call("org.bluez.Adapter1", "GetDiscoveryFilters", ())
             .and_then(|r: (Vec<String>,)| Ok(r.0))

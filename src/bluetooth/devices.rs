@@ -216,7 +216,7 @@ impl<M: BluetoothManager> Device<M> {
                     InfoType::OptString(Some(propval)) => {
                         format!("{prefix}{propval}")
                     }
-                InfoType::Boolean(propval) => format!(
+                    InfoType::Boolean(propval) => format!(
                         "{prefix}{}{}{ansi_reset}",
                         if *propval { ansi_green } else { ansi_red },
                         if *propval { "yes" } else { "no" }
