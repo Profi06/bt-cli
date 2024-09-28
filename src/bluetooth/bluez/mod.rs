@@ -21,11 +21,7 @@ use dbus::{
 use dbus_crossroads::Crossroads;
 use device::OrgBluezDevice1;
 use std::{
-    collections::HashMap,
-    io::{self, Read, Write},
-    sync::{Arc, Mutex, RwLock},
-    thread,
-    time::Duration,
+    collections::HashMap, io::{self, Read, Write}, sync::{Arc, Mutex}, thread, time::Duration
 };
 
 pub const BLUEZ_DBUS: &str = "org.bluez";
@@ -192,6 +188,9 @@ impl BluetoothManager for DBusBluetoothManager {
     }
 
     fn pair_device(&self, device: &Device<Self>) -> bool {
+        if device.paired {
+            return true
+        }
         self._create_device_proxy(&device.address)
             .is_some_and(|proxy| {
                 // Cannot call proxy method directly because that would block 
@@ -200,18 +199,23 @@ impl BluetoothManager for DBusBluetoothManager {
                 // Variables for communication between closure and this scope
                 let return_value = Arc::new(Mutex::new(false));
                 let return_value_closure = Arc::clone(&return_value);
-                let answer_pending = Arc::new(Mutex::new(true));
-                let answer_pending_closure = Arc::clone(&answer_pending);
                 let agent_token = self._register_agent(device);
 
                 if let Ok(msg) = Message::new_method_call(
                     proxy.destination, proxy.path, "org.bluez.Device1", "Pair") 
                 {
-                    let pair_reply_serial = self.connection.send(msg).ok();
+                    let answer_pending = Arc::new(Mutex::new(true));
+                    let answer_pending_closure = Arc::clone(&answer_pending);
+                    let pair_reply_serial = Arc::new(Mutex::new(None));
+                    let pair_reply_serial_closure = Arc::clone(&pair_reply_serial);
+
                     let pair_token = self.connection.start_receive(
                         MatchRule::new().with_sender(BLUEZ_DBUS), 
                         Box::new(move |mut answer, _conn| {
-                            if pair_reply_serial != answer.get_reply_serial() {
+                            let answer_serial = pair_reply_serial_closure.lock().expect("Mutex should not be poisoned.");
+                            if *answer_serial != answer.get_reply_serial() 
+                                || answer_serial.is_none()
+                            {
                                 // Not the reply, continue receiving
                                 return true;
                             }
@@ -225,6 +229,9 @@ impl BluetoothManager for DBusBluetoothManager {
                             *answer_pending_closure.lock().expect("Mutex should not be poisoned.") = false;
                             return false;
                         }));
+                    *pair_reply_serial.lock()
+                        .expect("Mutex should not be poisoned.") 
+                        = self.connection.send(msg).ok();
                     while answer_pending.lock().is_ok_and(|pending| *pending) {
                         let _ = self.connection.process(DBUS_TIMEOUT);
                     }
@@ -259,6 +266,9 @@ impl BluetoothManager for DBusBluetoothManager {
     }
 
     fn connect_device(&self, device: &Device<Self>) -> bool {
+        if device.connected {
+            return true
+        }
         self._create_device_proxy(&device.address)
             .is_some_and(|proxy| match proxy.connect() {
                 Ok(_) => true,
