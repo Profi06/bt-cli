@@ -168,8 +168,7 @@ impl BluetoothManager for DBusBluetoothManager {
         )
     }
 
-    fn set_pairable(&self, pairable: bool) {
-        pairable;
+    fn set_pairable(&self, _pairable: bool) {
         todo!()
     }
 
