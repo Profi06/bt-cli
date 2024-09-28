@@ -132,7 +132,6 @@ impl<M: BluetoothManager> Device<M> {
             true
         });
         if success {
-            self.paired = false;
             self.connected = false;
             println!("{} disconnected.", self.get_name_colored());
         } else {
