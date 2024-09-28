@@ -3,7 +3,6 @@ use crate::utils::{self, ansi::*};
 use regex::Regex;
 use std::{
     io::{stdout, Write},
-    process::Command,
     sync::Weak,
     sync::{Arc, Mutex},
 };
@@ -27,7 +26,7 @@ pub struct Device<M: BluetoothManager> {
     pub icon: Option<String>,
 
     // Allow ANSI code color in output from this struct
-    name_in_color: bool,
+    pub name_in_color: bool,
 }
 
 enum InfoType<'a> {
@@ -68,14 +67,12 @@ impl<M: BluetoothManager> Device<M> {
     /// Attempts to pair with device
     pub fn pair(&mut self) -> bool {
         println!("Attempting to pair with {}...", self.get_name_colored());
-        pairable(true);
         let success = self.bluetooth_manager.upgrade().is_some_and(|bt_man| {
             bt_man
                 .lock()
                 .expect("Mutex should not be poisoned.")
                 .pair_device(&self)
         });
-        pairable(false);
         if success {
             self.paired = true;
             println!("{} paired.", self.get_name_colored());
@@ -245,12 +242,6 @@ impl<M: BluetoothManager> Device<M> {
             .count()
             .try_into()
             .expect("Name length should adhere to bluetooth specification")
-    }
-
-    /// Sets whether strings returned by name functions will be colored with
-    /// ANSI color codes
-    pub fn set_name_in_color(&mut self, val: bool) {
-        self.name_in_color = val;
     }
 
     /// Sets the bluetooth manager of this device to a Weak downgraded from
@@ -546,6 +537,10 @@ impl<M: BluetoothManager> DeviceList<M> {
     /// Sets whether output will be colored with ANSI color codes
     pub fn set_print_in_color(&mut self, val: bool) {
         self.print_in_color = val;
+        for device in &self.devices {
+            device.lock().expect("Mutex should not be poisoned.")
+               .name_in_color = val;
+        }
     }
 }
 
@@ -555,29 +550,4 @@ impl<M: BluetoothManager> IntoIterator for DeviceList<M> {
     fn into_iter(self) -> Self::IntoIter {
         self.devices.into_iter()
     }
-}
-
-/// Executes a bluetoothctl command, and calls output_fn(stdout, stderr) for
-/// the returned success value
-fn cli_cmd<F>(args: Vec<&str>, output_fn: F) -> bool
-where
-    F: Fn(String, String) -> bool,
-{
-    Command::new("bluetoothctl")
-        .args(args)
-        .output()
-        .is_ok_and(|output| {
-            let out = String::from_utf8(output.stdout).unwrap_or("".to_string());
-            let err = String::from_utf8(output.stderr).unwrap_or("".to_string());
-            output_fn(out, err)
-        })
-}
-
-/// Attempts to set the bluetooth pairable state to the value of
-/// new_state and returns whether the action was successful
-pub fn pairable(new_state: bool) -> bool {
-    cli_cmd(
-        vec!["pairable", if new_state { "on" } else { "off" }],
-        |out, _| out.contains("succeeded"),
-    )
 }
