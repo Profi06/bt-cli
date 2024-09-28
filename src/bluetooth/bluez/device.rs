@@ -57,151 +57,151 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
     fn connect(&self) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Device1", "Connect", ())
     }
-/*
-    fn connect_profile(&self, uuid: &str) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.Device1", "ConnectProfile", (uuid,))
-    }
+    /*
+        fn connect_profile(&self, uuid: &str) -> Result<(), dbus::Error> {
+            self.method_call("org.bluez.Device1", "ConnectProfile", (uuid,))
+        }
 
-    fn disconnect_profile(&self, uuid: &str) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.Device1", "DisconnectProfile", (uuid,))
-    }
-*/
+        fn disconnect_profile(&self, uuid: &str) -> Result<(), dbus::Error> {
+            self.method_call("org.bluez.Device1", "DisconnectProfile", (uuid,))
+        }
+    */
     fn pair(&self) -> Result<(), dbus::Error> {
         self.method_call("org.bluez.Device1", "Pair", ())
     }
-/*
-    fn cancel_pairing(&self) -> Result<(), dbus::Error> {
-        self.method_call("org.bluez.Device1", "CancelPairing", ())
-    }
+    /*
+        fn cancel_pairing(&self) -> Result<(), dbus::Error> {
+            self.method_call("org.bluez.Device1", "CancelPairing", ())
+        }
 
-    fn address(&self) -> Result<String, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "Address",
-        )
-    }
+        fn address(&self) -> Result<String, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "Address",
+            )
+        }
 
-    fn address_type(&self) -> Result<String, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "AddressType",
-        )
-    }
+        fn address_type(&self) -> Result<String, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "AddressType",
+            )
+        }
 
-    fn name(&self) -> Result<String, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "Name",
-        )
-    }
+        fn name(&self) -> Result<String, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "Name",
+            )
+        }
 
-    fn alias(&self) -> Result<String, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "Alias",
-        )
-    }
+        fn alias(&self) -> Result<String, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "Alias",
+            )
+        }
 
-    fn class(&self) -> Result<u32, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "Class",
-        )
-    }
+        fn class(&self) -> Result<u32, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "Class",
+            )
+        }
 
-    fn appearance(&self) -> Result<u16, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "Appearance",
-        )
-    }
+        fn appearance(&self) -> Result<u16, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "Appearance",
+            )
+        }
 
-    fn icon(&self) -> Result<String, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "Icon",
-        )
-    }
+        fn icon(&self) -> Result<String, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "Icon",
+            )
+        }
 
-    fn paired(&self) -> Result<bool, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "Paired",
-        )
-    }
+        fn paired(&self) -> Result<bool, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "Paired",
+            )
+        }
 
-    fn bonded(&self) -> Result<bool, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "Bonded",
-        )
-    }
+        fn bonded(&self) -> Result<bool, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "Bonded",
+            )
+        }
 
-    fn trusted(&self) -> Result<bool, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "Trusted",
-        )
-    }
+        fn trusted(&self) -> Result<bool, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "Trusted",
+            )
+        }
 
-    fn blocked(&self) -> Result<bool, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "Blocked",
-        )
-    }
+        fn blocked(&self) -> Result<bool, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "Blocked",
+            )
+        }
 
-    fn legacy_pairing(&self) -> Result<bool, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "LegacyPairing",
-        )
-    }
+        fn legacy_pairing(&self) -> Result<bool, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "LegacyPairing",
+            )
+        }
 
-    fn rssi(&self) -> Result<i16, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "RSSI",
-        )
-    }
+        fn rssi(&self) -> Result<i16, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "RSSI",
+            )
+        }
 
-    fn connected(&self) -> Result<bool, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "Connected",
-        )
-    }
+        fn connected(&self) -> Result<bool, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "Connected",
+            )
+        }
 
-    fn uuids(&self) -> Result<Vec<String>, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "UUIDs",
-        )
-    }
+        fn uuids(&self) -> Result<Vec<String>, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "UUIDs",
+            )
+        }
 
-    fn modalias(&self) -> Result<String, dbus::Error> {
-        <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
-            self,
-            "org.bluez.Device1",
-            "Modalias",
-        )
-    }
-*/
+        fn modalias(&self) -> Result<String, dbus::Error> {
+            <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
+                self,
+                "org.bluez.Device1",
+                "Modalias",
+            )
+        }
+    */
     fn adapter(&self) -> Result<dbus::Path<'static>, dbus::Error> {
         <Self as blocking::stdintf::org_freedesktop_dbus::Properties>::get(
             self,
@@ -209,7 +209,7 @@ impl<'a, T: blocking::BlockingSender, C: ::std::ops::Deref<Target = T>> OrgBluez
             "Adapter",
         )
     }
-/*
+    /*
     fn manufacturer_data(
         &self,
     ) -> Result<
