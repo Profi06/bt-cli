@@ -261,7 +261,7 @@ impl<M: BluetoothManager> Device<M> {
     }
 }
 
-/// Macro for DeviceList, used to asyncronously call a method on all devices in
+/// Macro for DeviceList, used to call a method on all devices in
 /// the list and return the sum of the return values of the successful method
 /// calls (usuallly evaluating to the amount of devices paired or similar)
 macro_rules! _async_all_devices {
