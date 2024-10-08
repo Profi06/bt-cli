@@ -76,6 +76,7 @@ impl<M: BluetoothManager> Device<M> {
         if success {
             self.paired = true;
             println!("{} paired.", self.get_name_colored());
+            self.connect();
         } else {
             println!("Could not pair {}.", self.get_name_colored());
         }
