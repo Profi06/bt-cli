@@ -144,7 +144,7 @@ impl BluetoothManager for DBusBluetoothManager {
                     let icon = prop_cast::<String>(d_props, "Icon").cloned();
 
                     let battery = interfaces.get(BATTERY_INTERFACE).and_then(|battery_props| {
-                        prop_cast::<u8>(battery_props, "Battery").cloned()
+                        prop_cast::<u8>(battery_props, "Percentage").cloned()
                     });
                     self.address_dbus_paths.insert(address.clone(), path);
                     let mut device =
