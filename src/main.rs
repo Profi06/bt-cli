@@ -6,6 +6,7 @@ mod utils;
 use bluetooth::{devices::FilterBehaviour, *};
 use bluez::DBusBluetoothManager;
 use clap::ArgMatches;
+use clap_complete::{generate, shells::{Bash, Zsh, Fish}};
 use std::{
     env,
     io::{stdout, IsTerminal},
@@ -17,90 +18,109 @@ fn main() {
     let mut command = cli::build_cli();
     let matches = command.get_matches_mut();
     let stdout_is_terminal = stdout().lock().is_terminal();
-    if let Ok(mut bluetooth_manager) = DBusBluetoothManager::new() {
-        bluetooth_manager.set_scan_display_hint(stdout_is_terminal);
-        bluetooth_manager.update();
-        let bluetooth_manager = Arc::new(Mutex::new(bluetooth_manager));
+    let bluetooth_manager: Arc<Mutex<DBusBluetoothManager>>;
+    if let Ok(mut dbus_manager) = DBusBluetoothManager::new() {
+        dbus_manager.set_scan_display_hint(stdout_is_terminal);
+        dbus_manager.update();
+        bluetooth_manager = Arc::new(Mutex::new(dbus_manager));
+    } else {
+        eprint!("Could not initialize Bluetooth");
+        return;
+    }
 
-        // Initialize empty device list and set values
-        let mut devicelist = DeviceList::new(Arc::clone(&bluetooth_manager));
-        devicelist.set_quote_names(stdout_is_terminal);
-        devicelist.set_print_in_color(stdout_is_terminal);
+    // Initialize empty device list and set values
+    let mut devicelist = DeviceList::new(Arc::clone(&bluetooth_manager));
+    devicelist.set_quote_names(stdout_is_terminal);
+    devicelist.set_print_in_color(stdout_is_terminal);
 
-        match matches.subcommand() {
-            Some(("list", sub_matches)) => {
-                let long_output = sub_matches.get_flag("long_output");
-                let linewise = sub_matches.get_flag("linewise");
-                if sub_matches.get_flag("all") {
-                    let timeout = get_timeout(&sub_matches.get_one("timeout").copied(), 30);
-                    bluetooth_manager
-                        .lock()
-                        .expect("Mutex should not be poisoned.")
-                        .scan_mut(&Duration::from_secs(timeout))
-                        .update();
-                }
-                devicelist.fill();
-                devicelist.print(linewise, long_output);
-            }
-            Some(("connect", sub_matches)) => {
-                let filter = sub_matches
-                    .get_one::<String>("filter")
-                    .expect("filter is required");
-                let count = devicelist
-                    .fill()
-                    .filtered_name(filter, get_behaviour(sub_matches))
-                    .connect_all();
-                println!("Connected {} devices.", count);
-            }
-            Some(("disconnect", sub_matches)) => {
-                let filter = sub_matches
-                    .get_one::<String>("filter")
-                    .expect("filter is required");
-                let count = devicelist
-                    .fill()
-                    .filtered_name(filter, get_behaviour(sub_matches))
-                    .disconnect_all();
-                println!("Disconnected {} devices.", count);
-            }
-            Some(("info", sub_matches)) => {
-                let filter = sub_matches
-                    .get_one::<String>("filter")
-                    .expect("filter is required");
-                devicelist
-                    .fill()
-                    .filtered_name(filter, get_behaviour(sub_matches))
-                    .print_info_all();
-            }
-            Some(("pair", sub_matches)) => {
-                let filter = sub_matches
-                    .get_one::<String>("filter")
-                    .expect("filter is required");
-                let timeout = get_timeout(&sub_matches.get_one("timeout").copied(), 5);
+    match matches.subcommand() {
+        Some(("list", sub_matches)) => {
+            let long_output = sub_matches.get_flag("long_output");
+            let linewise = sub_matches.get_flag("linewise");
+            if sub_matches.get_flag("all") {
+                let timeout = get_timeout(&sub_matches.get_one("timeout").copied(), 30);
                 bluetooth_manager
                     .lock()
                     .expect("Mutex should not be poisoned.")
                     .scan_mut(&Duration::from_secs(timeout))
                     .update();
-                let count = devicelist
-                    .fill()
-                    .filtered_name(filter, get_behaviour(sub_matches))
-                    .pair_all();
-                println!("Paired {} devices.", count);
             }
-            Some(("unpair", sub_matches)) => {
-                let filter = sub_matches
-                    .get_one::<String>("filter")
-                    .expect("filter is required");
-                let count = devicelist
-                    .fill()
-                    .filtered_name(filter, get_behaviour(sub_matches))
-                    .unpair_all();
-                println!("Unpaired {} devices.", count);
+            devicelist.fill();
+            devicelist.print(linewise, long_output);
+        }
+        Some(("connect", sub_matches)) => {
+            let filter = sub_matches
+                .get_one::<String>("filter")
+                .expect("filter is required");
+            let count = devicelist
+                .fill()
+                .filtered_name(filter, get_behaviour(sub_matches))
+                .connect_all();
+            println!("Connected {} devices.", count);
+        }
+        Some(("disconnect", sub_matches)) => {
+            let filter = sub_matches
+                .get_one::<String>("filter")
+                .expect("filter is required");
+            let count = devicelist
+                .fill()
+                .filtered_name(filter, get_behaviour(sub_matches))
+                .disconnect_all();
+            println!("Disconnected {} devices.", count);
+        }
+        Some(("info", sub_matches)) => {
+            let filter = sub_matches
+                .get_one::<String>("filter")
+                .expect("filter is required");
+            devicelist
+                .fill()
+                .filtered_name(filter, get_behaviour(sub_matches))
+                .print_info_all();
+        }
+        Some(("pair", sub_matches)) => {
+            let filter = sub_matches
+                .get_one::<String>("filter")
+                .expect("filter is required");
+            let timeout = get_timeout(&sub_matches.get_one("timeout").copied(), 5);
+            bluetooth_manager
+                .lock()
+                .expect("Mutex should not be poisoned.")
+                .scan_mut(&Duration::from_secs(timeout))
+                .update();
+            let count = devicelist
+                .fill()
+                .filtered_name(filter, get_behaviour(sub_matches))
+                .pair_all();
+            println!("Paired {} devices.", count);
+        }
+        Some(("unpair", sub_matches)) => {
+            let filter = sub_matches
+                .get_one::<String>("filter")
+                .expect("filter is required");
+            let count = devicelist
+                .fill()
+                .filtered_name(filter, get_behaviour(sub_matches))
+                .unpair_all();
+            println!("Unpaired {} devices.", count);
+        },
+        Some(("generate-shell-completions", sub_matches)) => {
+            if !sub_matches.get_flag("no_bash") {
+                println!("# Bash Autocompletions:");
+                generate(Bash, &mut cli::build_cli(), "bt", &mut stdout())
             }
-            // Some(_) should be unreachable but just in case
-            None | Some(_) => {
-                let _ = command.print_help();
+            if !sub_matches.get_flag("no_zsh") {
+                println!("# Zsh Autocompletions:");
+                generate(Zsh, &mut cli::build_cli(), "bt", &mut stdout())
             }
+            if !sub_matches.get_flag("no_fish") {
+                println!("# Fish Autocompletions:");
+                generate(Fish, &mut cli::build_cli(), "bt", &mut stdout())
+            }
+            
+        }
+        // Some(_) should be unreachable but just in case
+        None | Some(_) => {
+            let _ = command.print_help();
         }
     }
 }

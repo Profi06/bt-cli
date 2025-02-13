@@ -75,7 +75,7 @@ pub fn build_cli() -> Command {
         .subcommands([
             Command::new("list")
                 .visible_alias("ls")
-                .before_help("List bluetooth devices")
+                .about("List bluetooth devices")
                 .args([
                     Arg::new("long_output")
                         .short('l')
@@ -104,7 +104,7 @@ pub fn build_cli() -> Command {
                 ]),
             Command::new("connect")
                 .visible_alias("c")
-                .before_help("Connect to a bluetooth device")
+                .about("Connect to a bluetooth device")
                 .args([
                     name_arg.clone(),
                     partial_arg.clone(),
@@ -122,7 +122,7 @@ pub fn build_cli() -> Command {
                 ]),
             Command::new("disconnect")
                 .visible_alias("dc")
-                .before_help("Disconnect from a bluetooth device")
+                .about("Disconnect from a bluetooth device")
                 .args([
                     name_arg.clone(),
                     partial_arg.clone(),
@@ -139,7 +139,7 @@ pub fn build_cli() -> Command {
                 ]),
             Command::new("info")
                 .visible_alias("i")
-                .before_help("Get detailed information about a bluetooth device")
+                .about("Get detailed information about a bluetooth device")
                 .args([
                     name_arg.clone(),
                     partial_arg.clone(),
@@ -156,7 +156,7 @@ pub fn build_cli() -> Command {
                 ]),
             Command::new("pair")
                 .visible_alias("p")
-                .before_help("Pair with a bluetooth device")
+                .about("Pair with a bluetooth device")
                 .args([
                     name_arg.clone(),
                     partial_arg.clone(),
@@ -174,7 +174,7 @@ pub fn build_cli() -> Command {
                 ]),
             Command::new("unpair")
                 .visible_alias("up")
-                .before_help("Unpair from a bluetooth device")
+                .about("Unpair from a bluetooth device")
                 .args([
                     name_arg.clone(),
                     partial_arg.clone(),
@@ -189,5 +189,24 @@ pub fn build_cli() -> Command {
                     regex_arg_group.clone(),
                     filter_arg_group.clone(),
                 ]),
+            Command::new("generate-shell-completions")
+                .about("Generate autocompletions for bash, zsh and fish")
+                .args([
+                    Arg::new("no_bash")
+                        .short('B')
+                        .long("no_bash")
+                        .help("Do not generate autocompletions for bash")
+                        .action(ArgAction::SetTrue),
+                    Arg::new("no_zsh")
+                        .short('Z')
+                        .long("no_zsh")
+                        .help("Do not generate autocompletions for zsh")
+                        .action(ArgAction::SetTrue),
+                    Arg::new("no_fish")
+                        .short('F')
+                        .long("no_fish")
+                        .help("Do not generate autocompletions for fish")
+                        .action(ArgAction::SetTrue),
+                ])
         ])
 }
